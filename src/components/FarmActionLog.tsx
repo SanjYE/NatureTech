@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, CheckCircle2, Clock, Plus, User, Calendar, AlertCircle, Check } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface FarmActionLogProps {
   onBack: () => void;
@@ -32,7 +33,7 @@ export function FarmActionLog({ onBack, user }: FarmActionLogProps) {
 
   const fetchTasks = async () => {
     try {
-        const res = await fetch(`http://localhost:5000/tasks?userId=${user.user_id}&role=${user.role}&organisationId=${user.organisationId}`);
+        const res = await fetch(`${API_BASE_URL}/tasks?userId=${user.user_id}&role=${user.role}&organisationId=${user.organisationId}`);
         const data = await res.json();
         if (Array.isArray(data)) {
             setTasks(data);
@@ -51,7 +52,7 @@ export function FarmActionLog({ onBack, user }: FarmActionLogProps) {
     }
     try {
         console.log(`Fetching members for Org ID: ${user.organisationId}`);
-        const res = await fetch(`http://localhost:5000/organisation/${user.organisationId}/members`);
+        const res = await fetch(`${API_BASE_URL}/organisation/${user.organisationId}/members`);
         const data = await res.json();
         console.log("Members fetched:", data);
         setMembers(data);
@@ -67,7 +68,7 @@ export function FarmActionLog({ onBack, user }: FarmActionLogProps) {
     setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, status: newStatus } : t));
 
     try {
-        await fetch(`http://localhost:5000/tasks/${taskId}`, {
+        await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus })
@@ -93,7 +94,7 @@ export function FarmActionLog({ onBack, user }: FarmActionLogProps) {
             dueDate: newTask.dueDate
         };
 
-        const res = await fetch('http://localhost:5000/tasks', {
+        const res = await fetch(`${API_BASE_URL}/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

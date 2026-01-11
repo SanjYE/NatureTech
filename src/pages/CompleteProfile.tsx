@@ -4,6 +4,7 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Loader2, User, Building2, MapPin, Briefcase, Phone, ArrowRight } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface CompleteProfileProps {
   userId: string;
@@ -34,7 +35,7 @@ export function CompleteProfile({ userId, onComplete }: CompleteProfileProps) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/complete-profile', {
+      const response = await fetch(`${API_BASE_URL}/complete-profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

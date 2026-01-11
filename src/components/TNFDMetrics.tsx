@@ -1,5 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { ArrowLeft, User, Leaf, Droplets, Sprout, FlaskConical, CheckCircle, AlertCircle, ChevronDown, ChevronUp, FileText, Upload, Download, Map } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface TNFDMetricsProps {
   onBack: () => void;
@@ -80,7 +81,7 @@ export function TNFDMetrics({ onBack }: TNFDMetricsProps) {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const res = await fetch('http://localhost:5000/tnfd-metrics');
+        const res = await fetch(`${API_BASE_URL}/tnfd-metrics`);
         if (res.ok) {
           const data = await res.json();
           const formatted = data.map((m: any) => ({

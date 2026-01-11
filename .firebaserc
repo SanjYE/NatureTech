@@ -1,0 +1,10 @@
+{
+  "projects": {
+    "default": "nature-tech-484011"
+  },
+  "sites": {
+    "nature-tech-484011": {
+      "hosting": "nature-tech-484011"
+    }
+  }
+}

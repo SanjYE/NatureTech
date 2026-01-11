@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { ArrowLeft, Camera, Scan, MapPin, FileText, Download, Upload, Plus, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface CaptureFieldDataProps {
   onBack: () => void;
@@ -33,7 +34,7 @@ export function CaptureFieldData({ onBack, userEmail }: CaptureFieldDataProps) {
         spotsOnLeaves: formData.get('spots'),
         yellowLeaves: formData.get('yellowLeaves'),
         droopingLeaves: formData.get('drooping'),
-        visiblePests: formData.get('visiblePest'),
+        visiblePest: formData.get('visiblePest'),
         recentPestDamage: formData.get('recentPestDamage'),
         typeOfPest: formData.get('typeOfPest'),
         diameterAtBase: formData.get('diameterAtBase'),
@@ -71,7 +72,7 @@ export function CaptureFieldData({ onBack, userEmail }: CaptureFieldDataProps) {
     };
 
     try {
-        const response = await fetch('http://localhost:5000/observations', {
+        const response = await fetch(`${API_BASE_URL}/observations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)

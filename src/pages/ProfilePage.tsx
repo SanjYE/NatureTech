@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, User, Mail, Phone, Calendar, Shield, Loader2 } from 'lucide-react';
 import { TopNavBar } from '../components/TopNavBar';
+import { API_BASE_URL } from '../config';
 
 interface ProfilePageProps {
   user: any;
@@ -14,7 +15,7 @@ export function ProfilePage({ user, onBack }: ProfilePageProps) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/profiles/${user.user_id}`);
+        const res = await fetch(`${API_BASE_URL}/profiles/${user.user_id}`);
         if (res.ok) {
           const data = await res.json();
           setProfile(data);

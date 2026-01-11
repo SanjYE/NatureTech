@@ -5,6 +5,7 @@ import { ArrowLeft, MapPin, Trash2, Activity, Save, Sprout, Droplets, Tractor, H
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import { API_BASE_URL } from '../config';
 
 interface OnboardSiteProps {
   onBack: () => void;
@@ -371,7 +372,7 @@ export function OnboardSite({ onBack, userId, onSuccess }: OnboardSiteProps) {
 
       // await addDoc(collection(db, 'sites'), siteData);
       
-      const response = await fetch('http://localhost:5000/sites', {
+      const response = await fetch(`${API_BASE_URL}/sites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(siteData)

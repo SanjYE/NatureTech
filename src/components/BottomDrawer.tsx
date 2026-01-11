@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Thermometer, Droplets, CloudRain, Wind, AlertTriangle } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface MetricCardProps {
   icon: React.ReactNode;
@@ -52,7 +53,7 @@ export function BottomDrawer({ onToggle, user }: BottomDrawerProps) {
            }
 
            // 1. Fetch Site for the Org
-           const sitesRes = await fetch(`http://localhost:5000/sites?organisationId=${user.organisationId}`);
+           const sitesRes = await fetch(`${API_BASE_URL}/sites?organisationId=${user.organisationId}`);
            if (!sitesRes.ok) throw new Error("Failed to fetch sites");
            
            const sites = await sitesRes.json();

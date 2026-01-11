@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, CloudRain, Thermometer, Droplets, Wind } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface LiveSiteConditionsProps {
   onBack: () => void;
@@ -20,7 +21,7 @@ export function LiveSiteConditions({ onBack, user }: LiveSiteConditionsProps) {
            }
 
            // 1. Fetch Site for the Org
-           const sitesRes = await fetch(`http://localhost:5000/sites?organisationId=${user.organisationId}`);
+           const sitesRes = await fetch(`${API_BASE_URL}/sites?organisationId=${user.organisationId}`);
            if (!sitesRes.ok) throw new Error("Failed to fetch sites");
            
            const sites = await sitesRes.json();

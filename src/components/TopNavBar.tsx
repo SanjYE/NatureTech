@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, HelpCircle, Bell, LogOut } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface TopNavBarProps {
   onNavigate?: (screen: 'support' | 'dashboard' | 'alerts') => void;
@@ -14,7 +15,7 @@ export function TopNavBar({ onNavigate, onLogout, user }: TopNavBarProps) {
   useEffect(() => {
     const checkAlerts = async () => {
       try {
-        const res = await fetch('http://localhost:5000/alerts');
+        const res = await fetch(`${API_BASE_URL}/alerts`);
         if (res.ok) {
           const data = await res.json();
           // Check if there are any active alerts

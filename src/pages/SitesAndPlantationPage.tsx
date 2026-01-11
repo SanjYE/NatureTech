@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Map as MapIcon, Layers, Ruler, Mountain, Loader2, Navigation, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface SitesAndPlantationPageProps {
   user: any;
@@ -18,7 +19,7 @@ export function SitesAndPlantationPage({ user, onBack }: SitesAndPlantationPageP
         if (!user.organisationId) return;
 
         // Fetch Sites
-        const sitesRes = await fetch(`http://localhost:5000/sites?organisationId=${user.organisationId}`);
+        const sitesRes = await fetch(`${API_BASE_URL}/sites?organisationId=${user.organisationId}`);
         if (sitesRes.ok) {
           const sitesData = await sitesRes.json();
           setSites(sitesData);
@@ -26,7 +27,7 @@ export function SitesAndPlantationPage({ user, onBack }: SitesAndPlantationPageP
           // Fetch units for each site
           const unitsMap: Record<string, any[]> = {};
           for (const site of sitesData) {
-              const unitsRes = await fetch(`http://localhost:5000/site-units?siteId=${site.site_id}`);
+              const unitsRes = await fetch(`${API_BASE_URL}/site-units?siteId=${site.site_id}`);
               if (unitsRes.ok) {
                   unitsMap[site.site_id] = await unitsRes.json();
               }

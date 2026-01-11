@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Building2, Users, MapPin, Globe, Loader2, Award } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface MyOrganisationPageProps {
   user: any;
@@ -16,13 +17,13 @@ export function MyOrganisationPage({ user, onBack }: MyOrganisationPageProps) {
       try {
         if (!user.organisationId) return;
 
-        const orgRes = await fetch(`http://localhost:5000/organisations/${user.organisationId}`);
+        const orgRes = await fetch(`${API_BASE_URL}/organisations/${user.organisationId}`);
         if (orgRes.ok) {
            const orgData = await orgRes.json();
            setOrg(orgData);
         }
 
-        const memRes = await fetch(`http://localhost:5000/organisation/${user.organisationId}/members`);
+        const memRes = await fetch(`${API_BASE_URL}/organisation/${user.organisationId}/members`);
         if (memRes.ok) {
            const memData = await memRes.json();
            setMembers(memData);

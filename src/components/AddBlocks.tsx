@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2, Save, MapPin, Loader2, Crosshair } from 'lucid
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import { API_BASE_URL } from '../config';
 
 interface AddBlocksProps {
   siteId: string;
@@ -99,7 +100,7 @@ export function AddBlocks({ siteId, siteName, onBack, onFinish }: AddBlocksProps
         unitType: 'block' // Default type
       };
 
-      const response = await fetch('http://localhost:5000/site-units', {
+      const response = await fetch(`${API_BASE_URL}/site-units`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(blockData)

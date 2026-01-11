@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, User, Leaf, FlaskConical, Droplets, Sun, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { API_BASE_URL } from '../config';
 
 interface AIRecommendationsProps {
   onBack: () => void;
@@ -52,7 +53,7 @@ export function AIRecommendations({ onBack }: AIRecommendationsProps) {
     console.log('AIRecommendations mounted');
     const fetchRecs = async () => {
       try {
-        const res = await fetch('http://localhost:5000/recommendations');
+        const res = await fetch(`${API_BASE_URL}/recommendations`);
         const data = await res.json();
         // Filter out resolved recommendations to only show active suggestions
         // User request: "old recommendation is still there" -> So we hide 'resolved' ones.

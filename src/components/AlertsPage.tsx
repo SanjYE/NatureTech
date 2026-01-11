@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, User, AlertTriangle, CloudRain, Droplets, Flame, CheckCircle, Filter, Wind } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface AlertsPageProps {
   onBack: () => void;
@@ -82,7 +83,7 @@ export function AlertsPage({ onBack }: AlertsPageProps) {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const res = await fetch('http://localhost:5000/alerts');
+        const res = await fetch(`${API_BASE_URL}/alerts`);
         const data = await res.json();
         
         const formatted = data.map((a: any) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Wifi, Plus, CheckCircle, XCircle, Power, Loader2, Calendar, Hash, Server } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface ConnectedDevicesPageProps {
   user: any;
@@ -23,7 +24,7 @@ export function ConnectedDevicesPage({ user, onBack }: ConnectedDevicesPageProps
   const fetchDevices = async () => {
     try {
       if (!user.organisationId) return;
-      const res = await fetch(`http://localhost:5000/sensors?organisationId=${user.organisationId}`);
+      const res = await fetch(`${API_BASE_URL}/sensors?organisationId=${user.organisationId}`);
       if (res.ok) {
         const data = await res.json();
         setDevices(data);
@@ -50,7 +51,7 @@ export function ConnectedDevicesPage({ user, onBack }: ConnectedDevicesPageProps
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/sensors', {
+      const res = await fetch(`${API_BASE_URL}/sensors`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -85,7 +86,7 @@ export function ConnectedDevicesPage({ user, onBack }: ConnectedDevicesPageProps
   const toggleStatus = async (device: any) => {
     const newStatus = device.status === 'active' ? 'inactive' : 'active';
     try {
-        const res = await fetch(`http://localhost:5000/sensors/${device.sensor_id}/status`, {
+        const res = await fetch(`${API_BASE_URL}/sensors/${device.sensor_id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: newStatus })

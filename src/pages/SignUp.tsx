@@ -3,6 +3,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Loader2, Mail, Lock, ArrowRight, UserPlus } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 interface SignUpProps {
   onNavigateToLogin: () => void;
@@ -20,7 +21,7 @@ export function SignUp({ onNavigateToLogin }: SignUpProps) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/signup', {
+      const response = await fetch(`${API_BASE_URL}/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
