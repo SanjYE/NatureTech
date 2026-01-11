@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TNFD Block Dashboard — Embedded GeoJSON</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <style>
+    :root{ --sidebar-w:360px; --accent:#16a34a; --muted:#6b7280; --bg:#f8fafc; --card-shadow:0 6px 18px rgba(16,24,40,0.06); }
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+    .app{display:flex;height:100vh;background:var(--bg);overflow:hidden}
+    .left{width:var(--sidebar-w);min-width:260px;border-right:1px solid #e6e9ee;background:#fff;display:flex;flex-direction:column}
+    .map-wrap{flex:1;position:relative}
+    #map{height:100%;width:100%}
+    .header{padding:12px 14px;border-bottom:1px solid #eef2f6;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .title{font-weight:700}
+    .search{display:flex;gap:8px;align-items:center}
+    input.searchbox{padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;width:140px}
+    .list{overflow:auto;padding:8px;flex:1}
+    .row{padding:10px;border-radius:8px;display:flex;justify-content:space-between;gap:8px;cursor:pointer;align-items:center;margin-bottom:8px;border:1px solid transparent}
+    .row:hover{background:#fbfdff;border-color:#eef2f6}
+    .badge{padding:6px 8px;border-radius:999px;color:white;font-size:12px;font-weight:600}
+    .badge.veryhigh{background:#16a34a}
+    .badge.high{background:#34d399;color:#023}
+    .badge.mod{background:#f59e0b}
+    .badge.low{background:#dc2626}
+    .badge.na{background:#9CA3AF}
+    .controls{padding:10px;border-top:1px solid #eef2f6;display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .btn{padding:8px 10px;border-radius:6px;border:1px solid #dbe6ef;background:#fff;cursor:pointer}
+    .btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+    .legend{position:absolute;left:12px;bottom:12px;z-index:6000;background:#fff;border:1px solid #e8eef6;padding:10px;border-radius:8px;box-shadow:var(--card-shadow);font-size:13px}
+    .report-panel{width:360px;min-width:260px;border-left:1px solid #e6e9ee;background:#fff;display:flex;flex-direction:column}
+    .report-header{padding:12px;border-bottom:1px solid #eef2f6;display:flex;justify-content:space-between;align-items:center}
+    .report-body{padding:12px;overflow:auto;flex:1}
+    .report-title{font-weight:700;margin-bottom:6px}
+    .muted{color:var(--muted);font-size:13px}
+    @media(max-width:900px){ .app{flex-direction:column} .left{width:100%;min-width:100%;height:220px} .report-panel{position:fixed;left:8px;right:8px;bottom:8px;height:62vh;border-radius:10px;transform:translateY(110%);transition:transform .25s ease;z-index:7000} .report-panel.open{transform:translateY(0)} .map-wrap{height:calc(100vh - 220px)} .left .list{height:120px} }
+    small.note{display:block;color:var(--muted);margin-top:6px}
+    .export-actions{display:flex;gap:8px;margin-top:8px}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="left">
+    <div class="header">
+      <div>
+        <div class="title">TNFD Block Dashboard</div>
+        <small class="muted">Embedded GeoJSON — click a block to open full report</small>
+      </div>
+      <div class="search">
+        <input id="q" class="searchbox" placeholder="Search block..." />
+        <select id="filter" class="searchbox">
+          <option value="all">All RAG</option>
+          <option value="veryhigh">Very high</option>
+          <option value="high">High</option>
+          <option value="mod">Moderate</option>
+          <option value="low">Low</option>
+          <option value="na">Data gap</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="list" id="list"></div>
+
+    <div class="controls">
+      <div style="display:flex;gap:8px">
+        <button id="sortScore" class="btn">Sort: Composite ↓</button>
+        <button id="centerAll" class="btn">Zoom to blocks</button>
+      </div>
+      <div>
+        <button id="downloadAll" class="btn">Export all JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <div class="legend" id="legend">
+      <div style="font-weight:700">Composite Positive Impact (RAG)</div>
+      <div style="margin-top:6px">
+        <div><span style="display:inline-block;width:14px;height:14px;background:#16a34a;border-radius:3px;margin-right:8px"></span>Very high</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:#34d399;border-radius:3px;margin-right:8px"></span>High</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:#f59e0b;border-radius:3px;margin-right:8px"></span>Moderate</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:#dc2626;border-radius:3px;margin-right:8px"></span>Low / Negative</div>
+        <div><span style="display:inline-block;width:14px;height:14px;background:#9CA3AF;border-radius:3px;margin-right:8px"></span>Data gap</div>
+      </div>
+      <small class="muted">Self-contained — no external GeoJSON required.</small>
+    </div>
+  </div>
+
+  <div id="report" class="report-panel" aria-hidden="true">
+    <div class="report-header">
+      <div>
+        <div class="report-title" id="reportTitle">Select a block</div>
+        <div class="muted" id="reportSub">—</div>
+      </div>
+      <div>
+        <button id="closeReport" class="btn">Close</button>
+      </div>
+    </div>
+    <div class="report-body" id="reportBody">
+      <div class="muted">Click a polygon or list item to view the TNFD block report here.</div>
+    </div>
+  </div>
+</div>
+
+<!-- libs -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+<script>
+// Embedded GeoJSON (from your uploaded file)
+const GEOJSON = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15163159822593,-25.66507358989821],[29.15231228813017,-25.66574111984349],[29.15296856642056,-25.66503267141734],[29.1522876131881,-25.66438548560716],[29.15163159822593,-25.66507358989821]]]},"properties":{"placemark_name":"29a","composite_positive_score":0.1436296164441886,"delta_SFI":12.15460480958109,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.0105,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15228844113737,-25.66438549656236],[29.15296856642056,-25.66503267141734],[29.15358556966034,-25.66437654444148],[29.15292270740793,-25.66371434325492],[29.15228844113737,-25.66438549656236]]]},"properties":{"placemark_name":"29b","composite_positive_score":0.127278232968627,"delta_SFI":11.88441809006972,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9531,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15303508507838,-25.66509592612424],[29.15237867992077,-25.66579895059933],[29.15279781468262,-25.66620382398007],[29.15303741085595,-25.66612699176209],[29.15359438948495,-25.66562742317289],[29.15303508507838,-25.66509592612424]]]},"properties":{"placemark_name":"30a","composite_positive_score":0.1277211638337294,"delta_SFI":11.89173698376402,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.7707,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15365476081866,-25.66444030342495],[29.15303591303325,-25.66509593707418],[29.15359438948495,-25.66562742317289],[29.15420102411806,-25.66498477095429],[29.15365476081866,-25.66444030342495]]]},"properties":{"placemark_name":"30b","composite_positive_score":0.1277846343663391,"delta_SFI":11.89278575709975,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.767,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15363853456962,-25.66431244976603],[29.15409556910729,-25.66382795917409],[29.15330309698917,-25.6633258805454],[29.15299163153366,-25.66364698075106],[29.15363853456962,-25.66431244976603]]]},"properties":{"placemark_name":"33","composite_positive_score":0.111252266991919,"delta_SFI":11.61960849883733,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.5731,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15427026815542,-25.66491030359],[29.15481074676559,-25.66428043044718],[29.1541793691969,-25.66388184162021],[29.1537138988192,-25.66437730479232],[29.15427026815542,-25.66491030359]]]},"properties":{"placemark_name":"34","composite_positive_score":0.1233413126808302,"delta_SFI":11.81936527180958,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.6335,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15002153910615,-25.66223115145111],[29.15070387542832,-25.66287800345482],[29.15142441844981,-25.66212942430718],[29.15115948962665,-25.66195895009034],[29.15060541030609,-25.66160727757357],[29.15002153910615,-25.66223115145111]]]},"properties":{"placemark_name":"26a","composite_positive_score":0.1352781067013079,"delta_SFI":12.0166062711841,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9997,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14937432017597,-25.6629214786495],[29.15004728956475,-25.66357081510904],[29.15070283832312,-25.66287704081034],[29.15002125099538,-25.6622308842585],[29.14937432017597,-25.6629214786495]]]},"properties":{"placemark_name":"26b","composite_positive_score":0.1351626191690819,"delta_SFI":12.01469798021146,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9926,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.1501154218721,-25.66363752452688],[29.15080860932822,-25.66428355557667],[29.15146299276208,-25.66360052382668],[29.15077480590172,-25.66294855610661],[29.1501154218721,-25.66363752452688]]]},"properties":{"placemark_name":"27a","composite_positive_score":0.135369237032077,"delta_SFI":12.01811208903464,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.0032,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15077407183883,-25.66294922771732],[29.15146252364251,-25.66360092112134],[29.15211395434004,-25.66291213650669],[29.15144565359026,-25.66224668595128],[29.15077407183883,-25.66294922771732]]]},"properties":{"placemark_name":"27b","composite_positive_score":0.1347452878562351,"delta_SFI":12.00780208797482,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.0115,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15152920368438,-25.66366412355609],[29.15221788703121,-25.66431925272194],[29.15285732396337,-25.66364889633036],[29.15218198606611,-25.66298103545877],[29.15152920368438,-25.66366412355609]]]},"properties":{"placemark_name":"28b","composite_positive_score":0.1294348324078105,"delta_SFI":11.92005327217183,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9907,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15087834131606,-25.66435073564293],[29.15156118716503,-25.66500727667341],[29.15221747913947,-25.66431887412845],[29.15152879579234,-25.66366374495626],[29.15087834131606,-25.66435073564293]]]},"properties":{"placemark_name":"28a","composite_positive_score":0.1406479321405539,"delta_SFI":12.10533610385832,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.0031,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15218107706903,-25.66284609965646],[29.1523182244504,-25.66269869345354],[29.15150565000739,-25.66218005284446],[29.15218107706903,-25.66284609965646]]]},"properties":{"placemark_name":"31","composite_positive_score":0.1402073353078367,"delta_SFI":12.0980557772097,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.1064,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15291965934941,-25.66357790801887],[29.15321525292325,-25.66326732145136],[29.15240003427404,-25.66274958774369],[29.15224690425556,-25.66291394879744],[29.15291965934941,-25.66357790801887]]]},"properties":{"placemark_name":"32","composite_positive_score":0.1131091389159862,"delta_SFI":11.65029104838834,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.3446,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15494633662956,-25.66634719983187],[29.15572068025141,-25.66541944075912],[29.15494268434881,-25.6647072009806],[29.15420147086098,-25.66563265666397],[29.15494633662956,-25.66634719983187]]]},"properties":{"placemark_name":"24a","composite_positive_score":0.123922644047192,"delta_SFI":11.82897106541482,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.3887,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15572063687291,-25.66542136017662],[29.15635388125366,-25.66465624240895],[29.15536647454089,-25.6640535765661],[29.15522456882663,-25.66421541144471],[29.15512118553116,-25.66456683700807],[29.15494749897249,-25.66470890696518],[29.15572063687291,-25.66542136017662]]]},"properties":{"placemark_name":"24b","composite_positive_score":0.03913799133258229,"delta_SFI":10.42800782483592,"delta_OM_pct_y":null,"land_use":"Vegetables","area_ha":1.0705,"recommended_response":"Introduce cover crops and mulching to reduce bare soil periods; Soil health: increase organic inputs; monitor SOC annually; Prioritise erosion control (contour, grass strips); Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.1566764820424,-25.66634807020685],[29.15649093323195,-25.6659977888933],[29.15625108162289,-25.66572593076796],[29.1567767387945,-25.66491997271526],[29.15643431063609,-25.66470955162982],[29.15578635390642,-25.66548729267573],[29.1566764820424,-25.66634807020685]]]},"properties":{"placemark_name":"25a","composite_positive_score":0.863231212381184,"delta_SFI":24.04514574466148,"delta_OM_pct_y":null,"land_use":"Vegetables","area_ha":0.6262,"recommended_response":"Introduce cover crops and mulching to reduce bare soil periods; Soil health: increase organic inputs; monitor SOC annually; Prioritise erosion control (contour, grass strips); Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15335072209808,-25.66672813385604],[29.15406881966629,-25.66740386646367],[29.154478855577,-25.66690758406664],[29.15375968514935,-25.6662379564494],[29.15335072209808,-25.66672813385604]]]},"properties":{"placemark_name":"20","composite_positive_score":0.1137356295495779,"delta_SFI":11.66064304394564,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.702,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15447885557724,-25.66690758406647],[29.15487566836638,-25.6664333147811],[29.15415527603863,-25.66574524392969],[29.15375990323492,-25.66623759020317],[29.15447885557724,-25.66690758406647]]]},"properties":{"placemark_name":"22","composite_positive_score":0.0901467886946458,"delta_SFI":11.27086614603389,"delta_OM_pct_y":null,"land_use":"Seasonal grains","area_ha":0.6874,"recommended_response":"Adopt conservation tillage and residue retention; Optimize fertiliser application; soil testing per cycle; Establish windbreaks and contour barriers; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14710360928359,-25.66548826547574],[29.1472226059119,-25.6656150164809],[29.14794685143969,-25.66498362442293],[29.14774987357807,-25.66479344810102],[29.14710360928359,-25.66548826547574]]]},"properties":{"placemark_name":"3","composite_positive_score":0.9995561371909668,"delta_SFI":26.29774927983263,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.2378,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14638641179799,-25.6662522855417],[29.14642796956894,-25.66628992491019],[29.14716328764966,-25.66567786098924],[29.14705264406155,-25.66556912505744],[29.14638641179799,-25.6662522855417]]]},"properties":{"placemark_name":"4","composite_positive_score":1.0,"delta_SFI":26.30508357276662,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.1121,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14728905630231,-25.66567435588609],[29.147936713556,-25.66627129353846],[29.14865767383868,-25.66566970434894],[29.14800901467846,-25.66505742788642],[29.14728905630231,-25.66567435588609]]]},"properties":{"placemark_name":"8a","composite_positive_score":0.1330572221196028,"delta_SFI":11.97990885530849,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9255,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14643318320098,-25.66642280739841],[29.14630317956603,-25.66661780414336],[29.14691278309304,-25.66720459901731],[29.14786231838632,-25.6663527477877],[29.14723058580551,-25.66574602615636],[29.14643318320098,-25.66642280739841]]]},"properties":{"placemark_name":"9a","composite_positive_score":0.1608974486017997,"delta_SFI":12.43993472864946,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.2579,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14691234212762,-25.6672091099685],[29.1472545796831,-25.66753509248199],[29.14765938696173,-25.6676683987376],[29.14851487573559,-25.66696305183378],[29.14785660201732,-25.66635481442638],[29.14691234212762,-25.6672091099685]]]},"properties":{"placemark_name":"9b","composite_positive_score":0.1417484824713702,"delta_SFI":12.12352135919068,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.194,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14793475202089,-25.66627087779649],[29.14859108307813,-25.66690163398683],[29.14930949947284,-25.66628204458439],[29.14865493822948,-25.6656740663542],[29.14793475202089,-25.66627087779649]]]},"properties":{"placemark_name":"8b","composite_positive_score":0.1521766140729515,"delta_SFI":12.29583354746974,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9408,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14911009674098,-25.66320466429251],[29.1484994205026,-25.66392581227441],[29.14881325992005,-25.66424241872046],[29.14952945518005,-25.66361526163787],[29.14911009674098,-25.66320466429251]]]},"properties":{"placemark_name":"1","composite_positive_score":0.9992351734607111,"delta_SFI":26.29244574466146,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.5443,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14781184209319,-25.66471884563796],[29.14801196211804,-25.66492012159955],[29.14872800164384,-25.66431275557079],[29.14843418662898,-25.66400672783287],[29.14781184209319,-25.66471884563796]]]},"properties":{"placemark_name":"2","composite_positive_score":0.9994102563750864,"delta_SFI":26.29533877682282,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.3708,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14963017082837,-25.6637026924906],[29.14889885641622,-25.66431114019771],[29.1495378659686,-25.66491606757392],[29.15025663666972,-25.6643186083836],[29.14963017082837,-25.6637026924906]]]},"properties":{"placemark_name":"5","composite_positive_score":0.1629630883387073,"delta_SFI":12.4740669123293,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9184,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14954044399791,-25.66491607981906],[29.15018594676151,-25.66552432344738],[29.15089615767743,-25.66492381594462],[29.15025428204012,-25.66432174010805],[29.14954044399791,-25.66491607981906]]]},"properties":{"placemark_name":"6","composite_positive_score":0.1633481906498257,"delta_SFI":12.48043025952086,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9088,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14873847153525,-25.66560661523999],[29.14938659294883,-25.66621866456408],[29.1500979150605,-25.6655934951354],[29.14945723997668,-25.66499524910563],[29.14873847153525,-25.66560661523999]]]},"properties":{"placemark_name":"7a","composite_positive_score":0.132580458163405,"delta_SFI":11.97203091094379,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9262,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14808630138217,-25.66498322057788],[29.14873648180537,-25.66560756570733],[29.1494586568631,-25.66499819772224],[29.14879371172347,-25.66438296867291],[29.14808630138217,-25.66498322057788]]]},"properties":{"placemark_name":"7b","composite_positive_score":0.1327240783376404,"delta_SFI":11.97440405960062,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9369,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15091781405558,-25.66625385863318],[29.1515426341718,-25.66683786163052],[29.15224045748714,-25.66622659639491],[29.15160693210268,-25.66563129622176],[29.15091781405558,-25.66625385863318]]]},"properties":{"placemark_name":"11","composite_positive_score":0.1637155428885236,"delta_SFI":12.48650030835968,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.8883,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments; SOM low — increase organic inputs and reduce disturbance"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15024888775007,-25.66559916281362],[29.15091575398246,-25.6662552331032],[29.15160118000501,-25.66563135516439],[29.1509704796267,-25.66499040548309],[29.15024888775007,-25.66559916281362]]]},"properties":{"placemark_name":"10","composite_positive_score":0.1391927721327956,"delta_SFI":12.08129135501808,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9541,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14945679973569,-25.66628644029062],[29.15011732088848,-25.6669294711835],[29.15082334481517,-25.66632125793281],[29.15016853895317,-25.66565884031383],[29.14945679973569,-25.66628644029062]]]},"properties":{"placemark_name":"12a","composite_positive_score":0.1546274877945241,"delta_SFI":12.33633125408631,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9685,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15011610533463,-25.66692825717957],[29.15074881643328,-25.6675555660316],[29.15146303887455,-25.66692850665918],[29.1508237105175,-25.66632379280807],[29.15011610533463,-25.66692825717957]]]},"properties":{"placemark_name":"12b","composite_positive_score":0.1382928851316002,"delta_SFI":12.06642181708893,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9245,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14866512286219,-25.66696443701322],[29.14931762469182,-25.66760312128653],[29.15002592343448,-25.66699607765501],[29.14937553738654,-25.66634624063063],[29.14866512286219,-25.66696443701322]]]},"properties":{"placemark_name":"13a","composite_positive_score":0.1545836177322041,"delta_SFI":12.33560635467699,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9541,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14777233546029,-25.66771111359153],[29.1487858606195,-25.66808373023447],[29.14923571918649,-25.66767946531193],[29.14858933242075,-25.66703289131559],[29.14777233546029,-25.66771111359153]]]},"properties":{"placemark_name":"14a","composite_positive_score":0.02538390198838709,"delta_SFI":10.2007382310839,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.8603,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14931762469182,-25.66760312128653],[29.14993181926428,-25.66822909736349],[29.15065920501383,-25.66761691427246],[29.15002901887438,-25.66698566824743],[29.14931762469182,-25.66760312128653]]]},"properties":{"placemark_name":"13b","composite_positive_score":0.1335473622595002,"delta_SFI":11.98800782483591,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9303,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.14878596081785,-25.66808550361266],[29.14968837022767,-25.66842557353182],[29.14986361629585,-25.66828561424484],[29.14923571918649,-25.66767946531193],[29.14878596081785,-25.66808550361266]]]},"properties":{"placemark_name":"14a","composite_positive_score":0.02538390198838709,"delta_SFI":10.2007382310839,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.8603,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15073421475276,-25.66885792160844],[29.15172902589706,-25.66918517038668],[29.15203000631964,-25.66893344343709],[29.1513860024588,-25.66831289473521],[29.15073421475276,-25.66885792160844]]]},"properties":{"placemark_name":"17b","composite_positive_score":0.1152680631935379,"delta_SFI":11.68596464561618,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.6154,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Soil functional index low — apply targeted amendments and microbial amendments"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.1497683531517,-25.66846653573531],[29.15073068787714,-25.66886112118972],[29.15138356498144,-25.66831572296254],[29.15072969394708,-25.66768311572167],[29.1497683531517,-25.66846653573531]]]},"properties":{"placemark_name":"17a","composite_positive_score":0.1159096043990362,"delta_SFI":11.69656533356433,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.0603,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Soil functional index low — apply targeted amendments and microbial amendments"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15227572585424,-25.6675378472223],[29.15290912089336,-25.66816846592834],[29.15360916346633,-25.66754371703842],[29.15295854543682,-25.66691077041214],[29.15227572585424,-25.6675378472223]]]},"properties":{"placemark_name":"15b","composite_positive_score":0.4802044674512174,"delta_SFI":17.71609475931719,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9346,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15081720117817,-25.66761996005618],[29.15146001699087,-25.66824427967076],[29.15219897744826,-25.66761267356994],[29.1515318389538,-25.6669935599607],[29.15081720117817,-25.66761996005618]]]},"properties":{"placemark_name":"16a","composite_positive_score":0.1383074205793398,"delta_SFI":12.0666619976796,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9627,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15145888267631,-25.66824524618198],[29.15210235343692,-25.66886210424618],[29.15284873571134,-25.66823434423064],[29.15219797804345,-25.66761385801692],[29.15145888267631,-25.66824524618198]]]},"properties":{"placemark_name":"16b","composite_positive_score":0.1384505050087351,"delta_SFI":12.06902629380471,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9661,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots; Soil functional index low — apply targeted amendments and microbial amendments"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15162582087441,-25.66692032347442],[29.15227546430982,-25.66753614421095],[29.15295810162581,-25.66691184758257],[29.15232842691719,-25.66629155669077],[29.15162582087441,-25.66692032347442]]]},"properties":{"placemark_name":"15a","composite_positive_score":0.7441927395910792,"delta_SFI":22.07817979912719,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9237,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation; Targeted soil remediation (compost, deep-root species) in hotspots"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15278419117827,-25.66961749010629],[29.15366952069459,-25.66995364183479],[29.15411112946126,-25.66946398753559],[29.15354572213202,-25.66892753762841],[29.15278419117827,-25.66961749010629]]]},"properties":{"placemark_name":"19b","composite_positive_score":0.0,"delta_SFI":9.781300131739535,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.7693,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15361514402546,-25.6688538467878],[29.15414172730872,-25.66937034584799],[29.15477574448435,-25.66868927665013],[29.15429288015975,-25.66822857671427],[29.15361514402546,-25.6688538467878]]]},"properties":{"placemark_name":"18b","composite_positive_score":0.3262540614394808,"delta_SFI":15.17225158972106,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.7245,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15185036447988,-25.66925454678039],[29.15277744001564,-25.66961737610449],[29.15354824721241,-25.66892536634738],[29.15291004904138,-25.66831157812744],[29.15185036447988,-25.66925454678039]]]},"properties":{"placemark_name":"19a","composite_positive_score":0.06805884170181625,"delta_SFI":10.90588969326749,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":1.2111,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[29.15298657302371,-25.66823206400694],[29.15362280620089,-25.66885537534962],[29.15429615165429,-25.66822534975749],[29.15367542068072,-25.66761699686706],[29.15298657302371,-25.66823206400694]]]},"properties":{"placemark_name":"18a","composite_positive_score":0.6951199994514833,"delta_SFI":21.26731246820271,"delta_OM_pct_y":null,"land_use":"Mixed agroforestry","area_ha":0.9035,"recommended_response":"Maintain canopy and understory diversity; expand native species; Monitor biomass and SOC every 12 months; consider carbon validation"}}]} ;
+
+// dashboard code
+(function(){
+  const geojson = GEOJSON;
+  const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView([-25.663,29.152], 15);
+
+  const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' }).addTo(map);
+  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' });
+  L.control.layers({ 'Esri.WorldImagery': esri, 'OpenStreetMap': osm }, null, { position: 'topright', collapsed:false }).addTo(map);
+
+  function colorByScore(s){
+    if (s == null || isNaN(Number(s))) return '#9CA3AF';
+    s = Number(s);
+    if (s >= 0.75) return '#16a34a';
+    if (s >= 0.5) return '#34d399';
+    if (s >= 0.25) return '#f59e0b';
+    return '#dc2626';
+  }
+
+  const geoLayer = L.geoJSON(geojson, {
+    style: f => ({ color:'#111', weight:1.25, fillColor: colorByScore(f.properties?.composite_positive_score), fillOpacity:0.7 }),
+    onEachFeature: (f, layer) => {
+      const p = f.properties||{};
+      const name = p.placemark_name || p.block_name || 'Block';
+      const comp = (p.composite_positive_score!=null)? Number(p.composite_positive_score).toFixed(3) : 'n/a';
+      layer.bindTooltip(`${name} — Composite: ${comp}`, { sticky:true });
+
+      layer.on('click', () => showReport(p, f));
+      layer.on('mouseover', () => layer.setStyle({ weight:2.5 }));
+      layer.on('mouseout', () => layer.setStyle({ weight:1.25 }));
+    }
+  }).addTo(map);
+
+  try { map.fitBounds(geoLayer.getBounds().pad(0.2)); } catch(e){}
+
+  const listEl = document.getElementById('list');
+  let items = (geojson.features || []).map(fn => ({ properties: fn.properties || {}, feature: fn }));
+  items.forEach(it => it._score = Number(it.properties.composite_positive_score ?? NaN));
+
+  function ragClass(score){
+    if (score==null || isNaN(score)) return 'na';
+    if (score>=0.75) return 'veryhigh';
+    if (score>=0.5) return 'high';
+    if (score>=0.25) return 'mod';
+    return 'low';
+  }
+
+  function renderList(rows){
+    listEl.innerHTML = '';
+    rows.forEach(r => {
+      const p = r.properties;
+      const div = document.createElement('div');
+      div.className = 'row';
+      div.innerHTML = `
+        <div style="flex:1; min-width:0">
+          <div style="font-weight:600; font-size:14px">${p.placemark_name || p.block_name || 'Block'}</div>
+          <div class="muted" style="font-size:13px">${p.land_use || ''} — ${p.area_ha ?? 'n/a'} ha</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end">
+          <div class="badge ${'__RAG_CLASS__'}">${'__SCORE_TEXT__'}</div>
+          <button class="btn" style="margin-top:6px;padding:6px 8px;font-size:12px" data-name="__NAME__">Open</button>
+        </div>
+      `;
+      div.querySelector('button').addEventListener('click', () => {
+        showReport(p, r.feature);
+        try {
+          const layer = geoLayer.getLayers().find(l => l.feature === r.feature);
+          if (layer) map.flyTo(layer.getBounds().getCenter(), Math.max(map.getZoom(),16));
+        } catch(_){}
+      });
+      listEl.appendChild(div);
+    });
+  }
+
+  items.sort((a,b) => (isNaN(b._score)? -Infinity : b._score) - (isNaN(a._score)? -Infinity : a._score));
+  renderList(items);
+
+  document.getElementById('sortScore').onclick = () => { items.reverse(); renderList(items); };
+  document.getElementById('centerAll').onclick = () => { try{ map.fitBounds(geoLayer.getBounds().pad(0.15)) }catch(e){} };
+  document.getElementById('filter').onchange = (e) => {
+    const v = e.target.value;
+    const filtered = items.filter(it => {
+      if (v==='all') return true;
+      const cls = ragClass(it._score);
+      return cls === v;
+    });
+    renderList(filtered);
+  };
+  document.getElementById('q').oninput = (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const filtered = items.filter(it => {
+      if (!q) return true;
+      const p = it.properties;
+      return (p.placemark_name||'').toLowerCase().includes(q) || (p.land_use||'').toLowerCase().includes(q);
+    });
+    renderList(filtered);
+  };
+  document.getElementById('downloadAll').onclick = () => {
+    const data = items.map(it => it.properties);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    saveAs(blob, 'tnfd_all_blocks.json');
+  };
+
+  const report = document.getElementById('report');
+  const reportTitle = document.getElementById('reportTitle');
+  const reportSub = document.getElementById('reportSub');
+  const reportBody = document.getElementById('reportBody');
+  document.getElementById('closeReport').addEventListener('click', () => {
+    if (window.innerWidth <= 900) report.classList.remove('open');
+    else { report.setAttribute('aria-hidden','true'); report.style.display='none'; }
+  });
+
+  function showReport(props, feature){
+    const p = props || {};
+    const dependency_overall = p.dependency_overall || inferOverallDependency(p);
+    const impact_direction = (p.delta_SFI && Number(p.delta_SFI) > 0) || (p.composite_positive_score && p.composite_positive_score > 0.5) ? 'Positive' : 'Neutral/Negative';
+    const impact_magnitude = classifyImpact(p.delta_SFI, p.composite_positive_score);
+
+    reportTitle.innerText = `${p.placemark_name || p.block_name || 'Block'}`;
+    reportSub.innerText = `${p.land_use || '—'} • ${p.area_ha ?? 'n/a'} ha`;
+    reportBody.innerHTML = `
+      <div style="margin-bottom:10px"><small class="muted">Coordinates source: KMZ / GeoJSON</small></div>
+      <h4 style="margin:0 0 6px 0">1. Nature Dependencies</h4>
+      <div style="font-size:14px">
+        Soil fertility: <strong>${'(p.dependency_soil || inferFromLandUse(p,\'soil\'))'}</strong><br/>
+        Water regulation: <strong>${"(p.dependency_water || 'Medium')"}</strong><br/>
+        Climate regulation: <strong>${"(p.dependency_climate || 'High')"}</strong><br/>
+        <em>Overall dependency:</em> <strong>${'dependency_overall'}</strong>
+      </div>
+      <hr style="margin:10px 0">
+      <h4 style="margin:0 0 6px 0">2. Nature Impacts (Measured)</h4>
+      <div style="font-size:14px">
+        ΔSFI: <strong>${"(p.delta_SFI ?? 'n/a')"}</strong><br/>
+        ΔSoil Organic Matter (%): <strong>${"(p.delta_OM_pct_y ?? 'n/a')"}</strong><br/>
+        ΔSOC (t/ha): <strong>${"(p.delta_SOC_t_ha ?? 'n/a')"}</strong><br/>
+        Bulk density Δ: <strong>${"(p.bulk_density_delta ?? 'n/a')"}</strong><br/>
+        Impact direction: <strong>${'impact_direction'}</strong><br/>
+        Impact magnitude: <strong>${'impact_magnitude'}</strong><br/>
+        <small class="muted">TNFD metric category: Soil function (SOM, SFI)</small>
+      </div>
+      <hr style="margin:10px 0">
+      <h4 style="margin:0 0 6px 0">3. TNFD Risk Summary</h4>
+      <div style="font-size:14px">
+        Physical nature risk: <strong>${"(p.risk_physical ?? 'n/a')"}</strong><br/>
+        Transition risk: <strong>${"(p.risk_transition ?? 'n/a')"}</strong><br/>
+        Systemic risk: <strong>${"(p.risk_systemic ?? 'n/a')"}</strong><br/>
+        <em>Overall TNFD risk:</em> <strong>${"(p.risk_overall ?? inferRiskFromComposite(p.composite_positive_score))"}</strong>
+      </div>
+      <hr style="margin:10px 0">
+      <h4 style="margin:0 0 6px 0">4. Responses & Actions</h4>
+      <div style="font-size:14px; white-space:pre-wrap">${"(p.recommended_response ?? 'No recommendation recorded')"}</div>
+      <hr style="margin:10px 0">
+      <h4 style="margin:0 0 6px 0">5. Composite positive impact score</h4>
+      <div style="font-size:16px;font-weight:700">${"((p.composite_positive_score!=null)? Number(p.composite_positive_score).toFixed(3) : 'n/a')"} / 1.00</div>
+      <div style="margin-top:8px" class="export-actions">
+        <button id="downloadJson" class="btn">Download JSON</button>
+        <button id="downloadPdf" class="btn primary">Download PDF</button>
+      </div>
+      <small class="muted">(Weights: ΔSFI 50%, ΔOM% 30%, ΔSOC 20%)</small>
+    `;
+
+    if (window.innerWidth <= 900) {
+      report.classList.add('open');
+    } else {
+      report.style.display='flex';
+      report.setAttribute('aria-hidden','false');
+    }
+
+    document.getElementById('downloadJson').onclick = () => {
+      const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
+      saveAs(blob, `${(p.placemark_name||'block').replace(/\s+/g,'_')}_tnfd_report.json`);
+    };
+
+    document.getElementById('downloadPdf').onclick = () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      let y = 40;
+      doc.setFontSize(14); doc.text(`${p.placemark_name || 'Block'} — TNFD Block Report`, 40, y); y+=24;
+      doc.setFontSize(10);
+      const lines = [
+        `Land use: ${(p.land_use || 'n/a')} • Area: ${(p.area_ha ?? 'n/a')} ha`,
+        '',
+        '1. Nature Dependencies',
+        ` Soil fertility: ${(p.dependency_soil || inferFromLandUse(p,'soil'))}`,
+        ` Water regulation: ${(p.dependency_water || 'Medium')}`,
+        ` Climate regulation: ${(p.dependency_climate || 'High')}`,
+        '',
+        '2. Nature Impacts (Measured)',
+        ` ΔSFI: ${(p.delta_SFI ?? 'n/a')}`,
+        ` ΔSoil Organic Matter (%): ${(p.delta_OM_pct_y ?? 'n/a')}`,
+        ` ΔSOC (t/ha): ${(p.delta_SOC_t_ha ?? 'n/a')}`,
+        '',
+        '3. TNFD Risk Summary',
+        ` Physical risk: ${(p.risk_physical ?? 'n/a')}`,
+        ` Transition risk: ${(p.risk_transition ?? 'n/a')}`,
+        ` Overall risk: ${(p.risk_overall ?? inferRiskFromComposite(p.composite_positive_score))}`,
+        '',
+        '4. Responses & Actions',
+        `${(p.recommended_response ?? 'No recommendation recorded')}`,
+        '',
+        `Composite positive score: ${((p.composite_positive_score!=null)? Number(p.composite_positive_score).toFixed(3) : 'n/a')} / 1.00`
+      ];
+      lines.forEach(line => {
+        const splitted = doc.splitTextToSize(line, 520);
+        doc.text(splitted, 40, y);
+        y += (splitted.length * 12) + 6;
+        if (y > 740) { doc.addPage(); y = 40; }
+      });
+      doc.save(`${(p.placemark_name||'block').replace(/\s+/g,'_')}_tnfd_report.pdf`);
+    };
+  }
+
+  function inferFromLandUse(p, field) {
+    const lu = (p.land_use||'').toLowerCase();
+    if (lu.includes('agroforestry') || lu.includes('mixed')) return field==='soil' ? 'High' : 'High';
+    if (lu.includes('vegetable')) return field==='soil' ? 'High' : 'Medium';
+    return 'Medium';
+  }
+  function inferOverallDependency(p){
+    return p.dependency_soil || 'Medium';
+  }
+  function classifyImpact(delta_sfi, composite){
+    const s = (delta_sfi!=null && !isNaN(Number(delta_sfi))) ? Math.abs(Number(delta_sfi)) : (composite!=null ? Number(composite) : NaN);
+    if (isNaN(s)) return 'Unknown';
+    if (s >= 0.5) return 'High';
+    if (s >= 0.2) return 'Moderate';
+    return 'Low';
+  }
+  function inferRiskFromComposite(c){
+    if (c==null || isNaN(Number(c))) return 'Unknown';
+    c = Number(c);
+    if (c >= 0.6) return 'Low';
+    if (c >= 0.4) return 'Medium';
+    return 'High';
+  }
+
+  console.log('Dashboard ready — blocks:', items.length);
+})();
+</script>
+
+</body>
+</html>

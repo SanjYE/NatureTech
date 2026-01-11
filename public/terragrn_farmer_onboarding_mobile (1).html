@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Terragrn — Farmer Onboarding (Mobile)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --green:#1b6b3a;
+      --muted:#6b6b6b;
+      --bg:#f4f7f6;
+      --card:#ffffff;
+      --gap:14px;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:var(--bg);color:#123;-webkit-text-size-adjust:100%}
+    .page{min-height:100vh;display:flex;flex-direction:column}
+    header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:12px 16px;
+      background:var(--card);
+      border-bottom:1px solid rgba(0,0,0,0.06);
+      position:sticky;
+      top:0;
+      z-index:40;
+    }
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand .mark{width:44px;height:34px;background:linear-gradient(180deg,var(--green),#0f5a32);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px}
+    .brand h1{font-size:16px;margin:0;color:var(--green);line-height:1.05}
+    main{flex:1;padding:16px;max-width:720px;margin:0 auto;box-sizing:border-box}
+    .lead{margin:8px 0 14px;color:var(--muted);line-height:1.35;font-size:14px}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 8px 24px rgba(11,81,48,0.04)}
+    label{display:block;font-size:13px;margin-bottom:6px;color:#234}
+    input[type=text],input[type=email],input[type=tel],select,textarea{
+      width:100%;padding:12px;border:1px solid #e9f0ed;border-radius:10px;font-size:16px;background:#fbfdfb;
+      box-sizing:border-box;
+    }
+    textarea{min-height:100px;resize:vertical}
+    .field{margin-bottom:12px}
+    .section-title{font-weight:600;color:#163c28;margin-bottom:8px;font-size:15px}
+    .actions{display:flex;gap:8px;flex-direction:column;justify-content:flex-end;margin-top:14px}
+    .btn{padding:12px 14px;border-radius:10px;border:0;font-weight:700;cursor:pointer;font-size:16px}
+    .btn.primary{background:var(--green);color:#fff;width:100%}
+    .btn.ghost{background:transparent;border:1px solid rgba(27,107,58,0.12);color:var(--green);width:100%}
+    .note{font-size:13px;color:var(--muted);text-align:left;margin-top:8px}
+    .two-col{display:flex;gap:10px}
+    .two-col > div{flex:1;min-width:0}
+    .checkbox-grid{display:flex;flex-wrap:wrap;gap:8px}
+    .checkbox-grid label{background:#f8fbf8;padding:8px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:8px;font-size:14px;border:1px solid transparent}
+    /* Increase hit area for inputs on mobile */
+    input[type=checkbox], input[type=radio] { width:18px; height:18px; }
+    /* Responsive behaviors */
+    @media (min-width:660px){
+      .actions{flex-direction:row}
+      .btn{min-width:120px}
+      .two-col{gap:16px}
+    }
+    @media print{header, .actions{display:none}.card{box-shadow:none}}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="brand">
+        <div class="mark">TG</div>
+        <div>
+          <h1>Terragrn</h1>
+          <div style="font-size:12px;color:var(--muted)">Farmer Onboarding</div>
+        </div>
+      </div>
+      <div>
+        <button class="btn ghost" onclick="document.getElementById('onboardForm').scrollIntoView({behavior:'smooth'})" aria-label="Open form">Open</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="lead">Short form to register a farm. Use <strong>Export</strong> to save a JSON record or <strong>Print</strong> for a paper copy.</div>
+
+      <form id="onboardForm" class="card" onsubmit="handleSubmit(event)">
+        <div class="field">
+          <label class="section-title">Farmer</label>
+          <div class="field"><label for="farmerName">Full name *</label><input id="farmerName" name="farmerName" type="text" required autocomplete="name" placeholder="e.g., John Doe"></div>
+          <div class="field"><label for="farmName">Farm name</label><input id="farmName" name="farmName" type="text" autocomplete="organization" placeholder="Optional"></div>
+        </div>
+
+        <div class="two-col" style="margin-bottom:12px">
+          <div class="field"><label for="phone">Phone *</label><input id="phone" name="phone" type="tel" inputmode="tel" required placeholder="+27 7xx xxx xxxx"></div>
+          <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" placeholder="Optional"></div>
+        </div>
+
+        <div class="field"><label for="nearestTown">Nearest town / village</label><input id="nearestTown" name="nearestTown" type="text" placeholder="e.g., Witbank"></div>
+
+        <div class="two-col" style="margin-bottom:12px">
+          <div class="field"><label for="gpsProvided">GPS boundary provided?</label><select id="gpsProvided" name="gpsProvided" aria-label="GPS boundary provided"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+          <div class="field"><label for="internalBlocks">Internal blocks (if any)</label><input id="internalBlocks" name="internalBlocks" type="text" placeholder="Block A, Block B"></div>
+        </div>
+
+        <div class="field"><label for="currentCrops">Main crops grown</label><input id="currentCrops" name="currentCrops" type="text" placeholder="Comma separated"></div>
+
+        <div class="two-col" style="margin-bottom:12px">
+          <div class="field"><label for="livestockPresent">Livestock present?</label><select id="livestockPresent" name="livestockPresent"><option value="">Select</option><option value="no">No</option><option value="yes">Yes</option></select></div>
+          <div class="field"><label for="livestockType">If yes, type</label><input id="livestockType" name="livestockType" type="text" placeholder="Cattle, goats, sheep"></div>
+        </div>
+
+        <div class="section-title">Soil & Water</div>
+        <div class="two-col" style="margin-bottom:12px">
+          <div class="field"><label for="soilTest">Recent soil test available?</label><select id="soilTest" name="soilTest"><option value="">Select</option><option value="yes">Yes</option><option value="no">No</option></select></div>
+          <div class="field"><label for="soilProblems">Known soil problems</label><input id="soilProblems" name="soilProblems" type="text" placeholder="e.g., acidity, erosion"></div>
+        </div>
+        <div class="field"><label for="irrigation">Irrigation available?</label><select id="irrigation" name="irrigation"><option value="">Select</option><option value="none">No</option><option value="drip">Drip</option><option value="pivot">Pivot</option><option value="canal">Canal</option></select></div>
+        <div class="field"><label for="waterSources">Water sources</label><input id="waterSources" name="waterSources" type="text" placeholder="Borehole, dam, river"></div>
+
+        <div class="section-title" style="margin-top:10px">Infrastructure & Challenges</div>
+        <div class="field"><label for="machinery">Available machinery</label><input id="machinery" name="machinery" type="text" placeholder="Tractor, sprayer"></div>
+        <div class="field"><label for="pests">Common pests / diseases</label><input id="pests" name="pests" type="text" placeholder="If known"></div>
+        <div class="field"><label for="climateIssues">Climate / wildlife issues</label><input id="climateIssues" name="climateIssues" type="text" placeholder="e.g., drought, elephants"></div>
+
+        <div class="section-title" style="margin-top:10px">Goals & Support</div>
+        <div class="field">
+          <label>What help do you want? (tick all that apply)</label>
+          <div class="checkbox-grid">
+            <label><input type="checkbox" name="support" value="Soil improvement"> Soil improvement</label>
+            <label><input type="checkbox" name="support" value="Crop planning"> Crop planning</label>
+            <label><input type="checkbox" name="support" value="Irrigation"> Irrigation</label>
+            <label><input type="checkbox" name="support" value="Agroforestry"> Agroforestry</label>
+            <label><input type="checkbox" name="support" value="Carbon"> Carbon</label>
+            <label><input type="checkbox" name="support" value="Other"> Other</label>
+          </div>
+        </div>
+
+        <div class="field"><label for="notes">Additional notes</label><textarea id="notes" name="notes" placeholder="Any other information"></textarea></div>
+
+        <div class="actions">
+          <button type="button" class="btn ghost" onclick="printForm()" aria-label="Print form">Print</button>
+          <button type="button" class="btn ghost" onclick="downloadJSON()" aria-label="Export JSON">Export JSON</button>
+          <button type="submit" class="btn primary" aria-label="Save form">Save</button>
+        </div>
+        <div class="note">Tip — Export JSON to keep a digital record, or Print for a signed copy.</div>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    function formToObject(form){
+      const data = {};
+      const f = new FormData(form);
+      for(const pair of f.entries()){
+        const k = pair[0], v = pair[1];
+        if(k === 'support'){
+          data.support = data.support || [];
+          data.support.push(v);
+        } else {
+          data[k] = v;
+        }
+      }
+      if(!data.support) data.support = [];
+      return data;
+    }
+
+    function download(filename, content){
+      const a = document.createElement('a');
+      const blob = new Blob([content],{type:'application/json'});
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+    }
+
+    function filenameSafe(name){
+      return (name||'unknown').trim().split(' ').join('_');
+    }
+
+    function timestamp(){
+      const d = new Date();
+      const iso = d.toISOString();
+      return iso.split(':').join('-').replace('T','-').slice(0,19);
+    }
+
+    function downloadJSON(){
+      const form = document.getElementById('onboardForm');
+      const obj = formToObject(form);
+      const now = timestamp();
+      const filename = `terragrn_farmer_onboard_${filenameSafe(obj.farmerName)}_${now}.json`;
+      download(filename, JSON.stringify(obj,null,2));
+    }
+
+    function printForm(){ window.print(); }
+
+    function handleSubmit(e){
+      e.preventDefault();
+      const form = e.target;
+      if(!form.checkValidity()){ form.reportValidity(); return; }
+      const obj = formToObject(form);
+      const now = timestamp();
+      const filename = `terragrn_farmer_onboard_${filenameSafe(obj.farmerName)}_${now}.json`;
+      download(filename, JSON.stringify(obj,null,2));
+      alert('Record exported. The form has been reset.');
+      form.reset();
+    }
+  </script>
+</body>
+</html>

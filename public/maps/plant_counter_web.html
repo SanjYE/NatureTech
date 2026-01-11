@@ -1,0 +1,466 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Plant counter — browser (OpenCV.js + XLSX)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 16px; color:#111 }
+    h1 { margin: 0 0 8px 0; }
+    .row { display:flex; gap:12px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+    .box { border:1px solid #ddd; padding:12px; border-radius:6px; background:#fafafa; }
+    label { display:block; font-weight:600; margin-bottom:6px; font-size:13px; }
+    input[type="number"], input[type="text"] { width:120px; padding:6px; border-radius:4px; border:1px solid #ccc; }
+    button { padding:8px 12px; border-radius:6px; border:0; background:#0b79f7; color:white; cursor:pointer; }
+    button.secondary { background:#444; }
+    canvas { border:1px solid #ccc; }
+    #log { white-space:pre-wrap; font-family:monospace; background:#111; color:#bfc; padding:8px; height:140px; overflow:auto; border-radius:6px; }
+    .small { font-size:12px; color:#555 }
+  </style>
+</head>
+<body>
+  <h1>Plant counter (browser) — video → Excel</h1>
+
+  <div class="row">
+    <div class="box" style="flex:1 1 520px;">
+      <label>Video file (mp4/avi/mov)</label>
+      <input id="videoFile" type="file" accept="video/*" />
+      <div class="small" style="margin-top:8px;">Note: Processing is done in your browser. Choose sampling interval and tuning values below.</div>
+
+      <hr />
+
+      <label>Sampling interval (ms)</label>
+      <input id="sampleMs" type="number" value="333" /> <span class="small">Milliseconds between sampled frames (lower = more frames)</span>
+
+      <div style="height:8px"></div>
+
+      <label>Cluster distances (pixels) — comma-separated</label>
+      <input id="clusterDistances" type="text" value="80,85,90,95" />
+
+      <div style="height:8px"></div>
+
+      <label>Min cluster area (px total) &nbsp; Min cluster members</label>
+      <input id="minClusterArea" type="number" value="400" /> &nbsp;
+      <input id="minClusterMembers" type="number" value="3" />
+
+      <div style="height:8px"></div>
+
+      <label>HSV bounds (H:0-179, S:0-255, V:0-255)</label>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input id="hMin" type="number" value="28" /> -
+        <input id="hMax" type="number" value="62" /> H &nbsp;
+        <input id="sMin" type="number" value="40" /> -
+        <input id="sMax" type="number" value="255" /> S &nbsp;
+        <input id="vMin" type="number" value="70" /> -
+        <input id="vMax" type="number" value="255" /> V
+      </div>
+
+      <div style="height:12px"></div>
+
+      <button id="startProcess">Process video → Excel</button>
+      <button id="cancelProcess" class="secondary" style="display:none">Cancel</button>
+
+      <div style="height:12px"></div>
+      <div id="progress" class="small">Idle</div>
+    </div>
+
+    <div class="box" style="flex:0 0 360px;">
+      <label>Test Mask / HSV inspector (image)</label>
+      <input id="imgFile" type="file" accept="image/*" />
+      <div style="height:8px"></div>
+      <button id="showMask">Show mask (test)</button>
+      <button id="inspectHSV" class="secondary">Open HSV inspector</button>
+
+      <div style="height:8px"></div>
+      <canvas id="imgCanvas" width="480" height="360"></canvas>
+      <div class="small" id="hsvReadout">HSV: -</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="box" style="flex: 1 1 100%;">
+      <label>Log / progress</label>
+      <div id="log">Ready.</div>
+    </div>
+  </div>
+
+  <!-- Hidden video and processing canvas -->
+  <video id="hiddenVideo" crossorigin="anonymous" style="display:none"></video>
+  <canvas id="processCanvas" width="1280" height="720" style="display:none"></canvas>
+
+  <!-- Libraries: OpenCV.js and SheetJS -->
+  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="cvLoaded = true"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <script>
+  // Globals
+  let cvLoaded = false;
+  let processing = false;
+  let cancelRequested = false;
+
+  const logEl = document.getElementById('log');
+  function log(...args){ console.log(...args); logEl.textContent += "\\n" + args.join(' '); logEl.scrollTop = logEl.scrollHeight; }
+
+  // Utility: parse cluster distances
+  function parseDistances(text){
+    return text.split(',').map(s=>parseInt(s.trim())).filter(n=>Number.isFinite(n) && n>0);
+  }
+
+  // Wait for OpenCV to be ready
+  function ensureCVReady(cb){
+    if(cvLoaded && window.cv && cv.Mat) return cb();
+    const wait = setInterval(()=>{
+      if(cvLoaded && window.cv && cv.Mat){
+        clearInterval(wait);
+        log('OpenCV.js loaded.');
+        cb();
+      }
+    }, 200);
+  }
+
+  // ===== Mask test / HSV inspector =====
+  const imgFileInput = document.getElementById('imgFile');
+  const imgCanvas = document.getElementById('imgCanvas');
+  const ctxImg = imgCanvas.getContext('2d');
+  const hsvReadout = document.getElementById('hsvReadout');
+
+  let lastImageMat = null;
+
+  imgFileInput.addEventListener('change', ()=>{
+    const f = imgFileInput.files[0];
+    if(!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      // fit into canvas
+      const W = imgCanvas.width;
+      const H = imgCanvas.height;
+      let scale = Math.min(W/img.width, H/img.height);
+      let dw = img.width * scale, dh = img.height * scale;
+      ctxImg.clearRect(0,0,W,H);
+      ctxImg.drawImage(img, 0, 0, dw, dh);
+      // keep mat for processing
+      ensureCVReady(()=> {
+        if(lastImageMat) lastImageMat.delete();
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = dw; tempCanvas.height = dh;
+        const tctx = tempCanvas.getContext('2d');
+        tctx.drawImage(img,0,0,dw,dh);
+        lastImageMat = cv.imread(tempCanvas);
+        log('Loaded image for mask test. Size:', lastImageMat.cols, lastImageMat.rows);
+      });
+    };
+    img.src = url;
+  });
+
+  // Show mask using current HSV inputs
+  document.getElementById('showMask').addEventListener('click', ()=>{
+    if(!lastImageMat){
+      alert('Please upload an image first.');
+      return;
+    }
+    ensureCVReady(()=> {
+      const hMin = parseInt(document.getElementById('hMin').value);
+      const hMax = parseInt(document.getElementById('hMax').value);
+      const sMin = parseInt(document.getElementById('sMin').value);
+      const sMax = parseInt(document.getElementById('sMax').value);
+      const vMin = parseInt(document.getElementById('vMin').value);
+      const vMax = parseInt(document.getElementById('vMax').value);
+      const src = lastImageMat.clone();
+      let hsv = new cv.Mat();
+      cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+      cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+      let low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [hMin, sMin, vMin, 0]);
+      let high = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [hMax, sMax, vMax, 255]);
+      let mask = new cv.Mat();
+      cv.inRange(hsv, low, high, mask);
+      // visualize mask as colored overlay
+      let masked = new cv.Mat();
+      cv.bitwise_and(src, src, masked, mask);
+      cv.imshow(imgCanvas, masked);
+      src.delete(); hsv.delete(); low.delete(); high.delete(); mask.delete(); masked.delete();
+      log('Displayed mask with HSV:', [hMin,hMax,sMin,sMax,vMin,vMax]);
+    });
+  });
+
+  // HSV inspector: show HSV under mouse
+  document.getElementById('inspectHSV').addEventListener('click', ()=>{
+    if(!lastImageMat){
+      alert('Please upload an image first.');
+      return;
+    }
+    imgCanvas.style.cursor = 'crosshair';
+    imgCanvas.onmousemove = (ev) => {
+      const rect = imgCanvas.getBoundingClientRect();
+      const x = Math.floor((ev.clientX - rect.left));
+      const y = Math.floor((ev.clientY - rect.top));
+      // read pixel from canvas
+      const px = ctxImg.getImageData(Math.max(0,x,0), Math.max(0,y,0), 1,1).data;
+      // convert RGB to HSV (OpenCV style H:0..179)
+      const r = px[0], g = px[1], b = px[2];
+      const hsv = rgbToHsv(r,g,b);
+      hsvReadout.textContent = `RGB(${r},${g},${b}) → HSV H:${hsv.h}, S:${hsv.s}, V:${hsv.v}`;
+    };
+    imgCanvas.onclick = ()=>{ imgCanvas.onmousemove = null; imgCanvas.onclick = null; imgCanvas.style.cursor='default'; };
+    alert('Move mouse over image to see HSV in the readout. Click to stop.');
+  });
+
+  function rgbToHsv(r,g,b){
+    // returns H in 0..179 (OpenCV), S 0..255, V 0..255
+    r/=255; g/=255; b/=255;
+    const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+    let h = 0;
+    if(d==0) h = 0;
+    else if(max===r) h = ( (g-b)/d % 6 );
+    else if(max===g) h = ( (b-r)/d + 2 );
+    else h = ( (r-g)/d + 4 );
+    h = Math.round(h*60);
+    if(h<0) h+=360;
+    // convert to OpenCV H range 0..179
+    const H = Math.round(h/2);
+    const S = Math.round((max===0 ? 0 : d/max) * 255);
+    const V = Math.round(max * 255);
+    return {h:H, s:S, v:V};
+  }
+
+  // ===== Video processing -> per-frame sampling, contour detection, clustering, excel output =====
+  const videoInput = document.getElementById('videoFile');
+  const hiddenVideo = document.getElementById('hiddenVideo');
+  const processCanvas = document.getElementById('processCanvas');
+  const pctx = processCanvas.getContext('2d');
+
+  document.getElementById('startProcess').addEventListener('click', ()=>{
+    if(processing) return;
+    const f = videoInput.files[0];
+    if(!f){ alert('Please choose a video file.'); return; }
+    ensureCVReady(()=> startProcessing(f) );
+  });
+
+  document.getElementById('cancelProcess').addEventListener('click', ()=>{
+    cancelRequested = true;
+  });
+
+  async function startProcessing(file){
+    processing = true; cancelRequested = false;
+    document.getElementById('cancelProcess').style.display = 'inline-block';
+    log('Starting processing for', file.name);
+
+    // read user settings
+    const sampleMs = Math.max(50, parseInt(document.getElementById('sampleMs').value) || 333);
+    const dists = parseDistances(document.getElementById('clusterDistances').value);
+    if(dists.length===0){ alert('Invalid cluster distances'); processing=false; return; }
+    const minClusterArea = Math.max(1, parseInt(document.getElementById('minClusterArea').value) || 400);
+    const minClusterMembers = Math.max(1, parseInt(document.getElementById('minClusterMembers').value) || 3);
+    const hMin=parseInt(document.getElementById('hMin').value), hMax=parseInt(document.getElementById('hMax').value);
+    const sMin=parseInt(document.getElementById('sMin').value), sMax=parseInt(document.getElementById('sMax').value);
+    const vMin=parseInt(document.getElementById('vMin').value), vMax=parseInt(document.getElementById('vMax').value);
+
+    // prepare video element
+    const url = URL.createObjectURL(file);
+    hiddenVideo.src = url;
+    await hiddenVideo.play().catch(()=>{}); // trying to load metadata
+    // wait until metadata loaded
+    await new Promise((res)=>{
+      if(hiddenVideo.readyState >= 2) return res();
+      hiddenVideo.onloadedmetadata = ()=> res();
+    });
+    hiddenVideo.pause();
+    const duration = hiddenVideo.duration;
+    const vidW = hiddenVideo.videoWidth || 1280;
+    const vidH = hiddenVideo.videoHeight || 720;
+    processCanvas.width = vidW;
+    processCanvas.height = vidH;
+
+    log('Video loaded', {duration, vidW, vidH, sampleMs, dists});
+
+    // compute sample times
+    const sampleTimes = [];
+    for(let t=0; t<duration*1000; t+=sampleMs) sampleTimes.push(t/1000.0);
+    log('Frames to sample:', sampleTimes.length);
+
+    // results structure: for each sampled frame time, store counts per distance
+    const results = []; // {time, counts: {dist:count,...} }
+
+    // helper: process one frame at current video time
+    function grabFrameMat(){
+      pctx.clearRect(0,0,processCanvas.width, processCanvas.height);
+      pctx.drawImage(hiddenVideo, 0,0, processCanvas.width, processCanvas.height);
+      let imgData = pctx.getImageData(0,0,processCanvas.width, processCanvas.height);
+      // create mat from canvas pixels
+      let src = cv.matFromImageData(imgData);
+      return src;
+    }
+
+    // clustering helper (JS)
+    function euclid(a,b){ const dx=a[0]-b[0], dy=a[1]-b[1]; return Math.hypot(dx,dy); }
+
+    function clusterCenters(centers, clusterDist){
+      // union-find / BFS graph components
+      const n = centers.length;
+      if(n===0) return [];
+      const adj = new Array(n).fill(0).map(()=>[]);
+      for(let i=0;i<n;i++){
+        for(let j=i+1;j<n;j++){
+          if(euclid(centers[i], centers[j]) <= clusterDist){
+            adj[i].push(j); adj[j].push(i);
+          }
+        }
+      }
+      const visited = new Array(n).fill(false);
+      const comps = [];
+      for(let i=0;i<n;i++){
+        if(visited[i]) continue;
+        const stack=[i]; visited[i]=true; const comp=[i];
+        while(stack.length>0){
+          const u = stack.pop();
+          for(const v of adj[u]) if(!visited[v]){ visited[v]=true; stack.push(v); comp.push(v); }
+        }
+        comps.push(comp);
+      }
+      return comps; // arrays of indices
+    }
+
+    // Process each sampled time sequentially
+    const totalToSample = sampleTimes.length;
+    for(let idx=0; idx<sampleTimes.length; idx++){
+      if(cancelRequested) { log('Cancelled by user'); break; }
+      const t = sampleTimes[idx];
+      hiddenVideo.currentTime = t;
+      // wait for seeked
+      await new Promise((res)=>{ hiddenVideo.onseeked = ()=> res(); });
+      // capture frame
+      const src = grabFrameMat();
+      // convert to HSV and mask
+      let hsv = new cv.Mat();
+      cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+      cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+      const low = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [hMin, sMin, vMin, 0]);
+      const high = new cv.Mat(hsv.rows, hsv.cols, hsv.type(), [hMax, sMax, vMax, 255]);
+      const mask = new cv.Mat();
+      cv.inRange(hsv, low, high, mask);
+      // morphological clean
+      const M = cv.Mat.ones(5,5, cv.CV_8U);
+      cv.erode(mask, mask, M);
+      cv.dilate(mask, mask, M);
+
+      // find contours on mask
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+      // collect centroids and areas
+      const centers = [];
+      const areas = [];
+      for(let i=0;i<contours.size();i++){
+        const cnt = contours.get(i);
+        const area = cv.contourArea(cnt);
+        if(area < 1) { cnt.delete(); continue; } // small
+        const mom = cv.moments(cnt);
+        if(mom.m00 !== 0){
+          const cx = Math.round(mom.m10 / mom.m00);
+          const cy = Math.round(mom.m01 / mom.m00);
+          centers.push([cx, cy]);
+          areas.push(area);
+        }
+        cnt.delete();
+      }
+
+      // for each cluster distance, cluster and compute valid clusters (apply min area & members)
+      const countsByDist = {};
+      for(const dist of dists){
+        const comps = clusterCenters(centers, dist);
+        let kept = 0;
+        for(const comp of comps){
+          // aggregate area and members
+          let sumArea = 0;
+          for(const idxMember of comp) sumArea += areas[idxMember] || 0;
+          if(comp.length >= minClusterMembers && sumArea >= minClusterArea) kept++;
+        }
+        countsByDist[dist] = kept;
+      }
+
+      // push results
+      results.push({time: t, counts: countsByDist});
+
+      // cleanup mats
+      src.delete(); hsv.delete(); low.delete(); high.delete(); mask.delete(); M.delete();
+      contours.delete(); hierarchy.delete();
+
+      // progress update
+      if((idx%5)===0 || idx === sampleTimes.length-1){
+        const pct = ((idx+1)/totalToSample*100).toFixed(1);
+        document.getElementById('progress').textContent = `Processed ${idx+1} / ${totalToSample} frames (${pct}%)`;
+        log(`Frame ${idx+1}/${totalToSample} @ ${t.toFixed(2)}s — counts: ${JSON.stringify(countsByDist)}`);
+      }
+    } // end frames
+
+    // finished or cancelled
+    processing = false;
+    document.getElementById('cancelProcess').style.display = 'none';
+    document.getElementById('progress').textContent = 'Processing finished. Preparing Excel...';
+
+    // build workbook data: one row per sampled frame, columns: time, count_{dist}...
+    const rows = [];
+    for(const r of results){
+      const row = { time_sec: r.time };
+      let sumAvgs = 0;
+      let cntDist = 0;
+      for(const dist of dists){
+        row[`count_${dist}`] = r.counts[dist] || 0;
+      }
+      rows.push(row);
+    }
+
+    // Also produce summary per distance: avg across frames, total_frames * avg
+    const summary = {};
+    for(const dist of dists){
+      const vals = results.map(r=> r.counts[dist] || 0);
+      const avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+      summary[dist] = { avg: avg, total_from_avg: avg * results.length };
+    }
+    // Add avg_of_4 if applicable
+    const distsArr = dists;
+    const avgOf4 = (distsArr.length>0) ? (distsArr.reduce((s,d)=>s + (summary[d].avg||0), 0) / distsArr.length) : 0;
+
+    // build sheet data
+    const sheetData = [];
+    // header
+    const header = ['frame_time_s'];
+    for(const dist of dists) header.push(`avg_count_per_frame_${dist}`); // per-frame value (we recorded counts per frame)
+    header.push('avg_of_all_dists'); header.push('frames_sampled');
+    sheetData.push(header);
+    // per-frame rows
+    for(const r of results){
+      const row = [ r.time ];
+      for(const dist of dists) row.push(r.counts[dist]||0);
+      row.push(''); // placeholder for avg_of_all_dists per row (we'll leave empty)
+      row.push(results.length);
+      sheetData.push(row);
+    }
+    // summary row
+    const summaryRow = ['SUMMARY'];
+    for(const dist of dists) summaryRow.push(Number((summary[dist].avg).toFixed(3)));
+    summaryRow.push(Number(avgOf4.toFixed(3))); summaryRow.push(results.length);
+    sheetData.push([]); sheetData.push(summaryRow);
+
+    // convert to workbook and download
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'counts');
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout], {type:'application/octet-stream'});
+    const urlOut = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = urlOut;
+    a.download = file.name.replace(/\.[^/.]+$/, '') + '_plant_counts.xlsx';
+    document.body.appendChild(a); a.click(); a.remove();
+    log('Excel download triggered.');
+
+    document.getElementById('progress').textContent = 'Done — Excel ready.';
+  }
+
+  // Polyfills: none, using modern features
+
+  </script>
+</body>
+</html>
