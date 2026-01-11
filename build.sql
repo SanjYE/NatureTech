@@ -1,5 +1,6 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 -- 1. Organisations Table
 CREATE TABLE IF NOT EXISTS organisations (
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS organisation_memberships (
     organisation_id UUID REFERENCES organisations(organisation_id) ON DELETE CASCADE,
     user_id UUID REFERENCES profiles(user_id) ON DELETE CASCADE,
-    role TEXT CHECK (role IN ('Admin', 'Member', 'Viewer')),
+    role TEXT CHECK (role IN ('Admin', 'Member', 'Viewer', 'Manager', 'Farmer', 'Owner')),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (organisation_id, user_id)
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS sites (
     site_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organisation_id UUID REFERENCES organisations(organisation_id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    site_code TEXT,
     site_type TEXT,
     country_code VARCHAR(10),
     admin_area TEXT,
