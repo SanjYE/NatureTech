@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Loader2, Mail, Lock, ArrowRight, UserPlus } from 'lucide-react';
+import { Loader2, Mail, Lock, ArrowRight, UserPlus, CheckCircle } from 'lucide-react';
 
 interface SignUpProps {
   onNavigateToLogin: () => void;
@@ -13,11 +13,13 @@ export function SignUp({ onNavigateToLogin }: SignUpProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccessMessage('');
 
     try {
       const response = await fetch('http://localhost:5000/signup', {
@@ -45,7 +47,10 @@ export function SignUp({ onNavigateToLogin }: SignUpProps) {
 
       // Success
       setLoading(false);
-      onNavigateToLogin();
+      setSuccessMessage('Account registered');
+      setTimeout(() => {
+        onNavigateToLogin();
+      }, 1500);
     } catch (err: any) {
       console.error("Sign Up Error:", err);
       setError(err.message || 'Failed to create account. Please try again.');
@@ -124,6 +129,13 @@ export function SignUp({ onNavigateToLogin }: SignUpProps) {
                 <div className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
                   {error}
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="text-sm text-green-600 bg-green-50 border border-green-100 p-3 rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                  <CheckCircle size={16} className="text-green-600 shrink-0" />
+                  {successMessage}
                 </div>
               )}
 
