@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, CloudRain, Thermometer, Droplets, Wind } from 'lucide-react';
+import { ArrowLeft, CloudRain, Thermometer, Droplets, Wind, ChevronDown, MapPin } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 interface LiveSiteConditionsProps {
@@ -10,45 +10,32 @@ interface LiveSiteConditionsProps {
 export function LiveSiteConditions({ onBack, user }: LiveSiteConditionsProps) {
   const [weather, setWeather] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [weatherLoading, setWeatherLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [siteName, setSiteName] = useState<string>('');
+  
+  const [sites, setSites] = useState<any[]>([]);
+  const [selectedSite, setSelectedSite] = useState<any>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchSites = async () => {
        try {
            if (!user || !user.organisationId) {
                throw new Error("No Organisation ID found.");
            }
 
-           // 1. Fetch Site for the Org
+           // 1. Fetch Sites for the Org
            const sitesRes = await fetch(`${API_BASE_URL}/sites?organisationId=${user.organisationId}`);
            if (!sitesRes.ok) throw new Error("Failed to fetch sites");
            
-           const sites = await sitesRes.json();
-           if (!sites || sites.length === 0) {
+           const fetchedSites = await sitesRes.json();
+           if (!fetchedSites || fetchedSites.length === 0) {
               throw new Error("No sites found for this organisation.");
            }
            
-           // Use the first site found
-           const site = sites[0];
-           setSiteName(site.name);
+           setSites(fetchedSites);
+           // Use the first site found by default
+           setSelectedSite(fetchedSites[0]);
            
-           if (!site.latitude || !site.longitude) {
-              throw new Error(`Site "${site.name}" is missing coordinates.`);
-           }
-
-           console.log(`Fetching weather for ${site.name} at ${site.latitude}, ${site.longitude}`);
-
-           // 2. Fetch Weather Data (Open-Meteo)
-           const weatherRes = await fetch(
-               `https://api.open-meteo.com/v1/forecast?latitude=${site.latitude}&longitude=${site.longitude}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&wind_speed_unit=kmh`
-           );
-           
-           if (!weatherRes.ok) throw new Error("Weather service unavailable");
-           
-           const weatherData = await weatherRes.json();
-           setWeather(weatherData.current);
-
        } catch (err: any) {
            console.error(err);
            setError(err.message || 'Error loading data');
@@ -57,8 +44,42 @@ export function LiveSiteConditions({ onBack, user }: LiveSiteConditionsProps) {
        }
     };
 
-    fetchData();
+    fetchSites();
   }, [user]);
+
+  useEffect(() => {
+    const fetchWeather = async () => {
+        if (!selectedSite) return;
+
+        if (!selectedSite.latitude || !selectedSite.longitude) {
+           console.warn(`Site "${selectedSite.name}" is missing coordinates.`);
+           setWeather(null);
+           return;
+        }
+
+        setWeatherLoading(true);
+        console.log(`Fetching weather for ${selectedSite.name} at ${selectedSite.latitude}, ${selectedSite.longitude}`);
+
+        try {
+           // 2. Fetch Weather Data (Open-Meteo)
+           const weatherRes = await fetch(
+               `https://api.open-meteo.com/v1/forecast?latitude=${selectedSite.latitude}&longitude=${selectedSite.longitude}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&wind_speed_unit=kmh`
+           );
+           
+           if (!weatherRes.ok) throw new Error("Weather service unavailable");
+           
+           const weatherData = await weatherRes.json();
+           setWeather(weatherData.current);
+        } catch (err) {
+            console.error("Error fetching weather:", err);
+            setWeather(null);
+        } finally {
+            setWeatherLoading(false);
+        }
+    };
+
+    fetchWeather();
+  }, [selectedSite]);
 
   const conditions = [
     { 
@@ -104,7 +125,7 @@ export function LiveSiteConditions({ onBack, user }: LiveSiteConditionsProps) {
           <h2 className="text-2xl font-semibold text-gray-800 mb-2">Live Site Conditions</h2>
           
           {loading ? (
-             <div className="p-8 text-center text-gray-500">Loading live weather data...</div>
+             <div className="p-8 text-center text-gray-500">Loading sites...</div>
           ) : error ? (
              <div className="p-4 bg-red-50 text-red-600 rounded-xl text-center mb-6">
                 <p className="font-bold">Unavailable</p>
@@ -113,27 +134,67 @@ export function LiveSiteConditions({ onBack, user }: LiveSiteConditionsProps) {
              </div>
           ) : (
             <>
-                <p className="text-sm text-gray-500 mb-6 flex items-center gap-2">
-                    Monitoring: <span className="font-bold text-[#1b6b3a]">{siteName}</span>
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Live</span>
-                </p>
-
-                <div className="flex flex-col gap-4">
-                    {conditions.map((item) => (
-                    <div
-                        key={item.id}
-                        className="flex flex-col items-center justify-center p-8 rounded-[24px] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_28px_rgba(63,167,124,0.18)] hover:scale-[1.02] transition-all duration-300 w-full"
-                    >
-                        <div className="text-[#3FA77C] mb-4">
-                        {item.icon}
-                        </div>
-                        <div className="text-center">
-                        <span className="block text-xl font-medium text-gray-700 mb-1">{item.label}</span>
-                        <span className="block text-sm text-gray-500 mt-1">{item.value}</span>
-                        </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm mb-6 border border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                         <label className="text-xs font-semibold uppercase tracking-wider text-gray-400">Monitoring Site</label>
+                         {sites.length > 1 && <span className="text-xs text-[#3FA77C] font-medium bg-green-50 px-2 py-0.5 rounded-full">{sites.length} Available</span>}
                     </div>
-                    ))}
+                    
+                    {sites.length > 1 ? (
+                        <div className="relative">
+                            <select
+                                value={selectedSite?.site_id || ''}
+                                onChange={(e) => {
+                                    const newSite = sites.find(s => s.site_id === e.target.value);
+                                    if (newSite) setSelectedSite(newSite);
+                                }}
+                                className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-900 text-base rounded-lg p-3 pr-10 focus:ring-[#3FA77C] focus:border-[#3FA77C] font-medium outline-none transition-all"
+                            >
+                                {sites.map(site => (
+                                    <option key={site.site_id} value={site.site_id}>
+                                        {site.name} {site.site_code ? `(${site.site_code})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200 text-gray-700 font-medium">
+                            <MapPin size={20} className="text-[#3FA77C]" />
+                            {selectedSite?.name || 'Unknown Site'}
+                        </div>
+                    )}
+                    
+                     {selectedSite && (
+                         <div className="mt-2 text-xs text-gray-400 flex items-center gap-1 pl-1">
+                             Coord: {selectedSite.latitude?.toFixed(4)}, {selectedSite.longitude?.toFixed(4)}
+                         </div>
+                     )}
                 </div>
+
+                {weatherLoading ? (
+                     <div className="py-12 flex flex-col items-center justify-center text-gray-400 animate-pulse">
+                         <CloudRain size={48} className="mb-4 opacity-50" />
+                         <span>Fetching satellite weather data...</span>
+                     </div>
+                ) : (
+                    <div className="flex flex-col gap-4">
+                        {conditions.map((item) => (
+                        <div
+                            key={item.id}
+                            className="flex flex-col items-center justify-center p-8 rounded-[24px] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.08)] hover:shadow-[0_8px_28px_rgba(63,167,124,0.18)] hover:scale-[1.02] transition-all duration-300 w-full"
+                        >
+                            <div className="text-[#3FA77C] mb-4">
+                            {item.icon}
+                            </div>
+                            <div className="text-center">
+                            <span className="block text-xl font-medium text-gray-700 mb-1">{item.label}</span>
+                            <span className="block text-sm text-gray-500 mt-1">{item.value}</span>
+                            </div>
+                        </div>
+                        ))}
+                    </div>
+                )}
             </>
           )}
         </div>
