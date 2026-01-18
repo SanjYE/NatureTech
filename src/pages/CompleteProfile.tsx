@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Loader2, User, Building2, MapPin, Briefcase, Phone, ArrowRight } from 'lucide-react';
+import { Loader2, User, Building2, MapPin, Briefcase, Phone, ArrowRight, ChevronDown } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 interface CompleteProfileProps {
@@ -66,11 +65,11 @@ export function CompleteProfile({ userId, onComplete }: CompleteProfileProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-[#FAFAF5] to-[#E8E8E0] p-6 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-[#FAFAF5] to-[#E8E8E0] p-6 relative">
       
       {/* Background Decorative Elements */}
-      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-[#3FA77C]/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-[-10%] left-[-10%] w-80 h-80 bg-[#C7A66B]/10 rounded-full blur-3xl" />
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-[#3FA77C]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-[-10%] left-[-10%] w-80 h-80 bg-[#C7A66B]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-2xl z-10">
         <div className="flex flex-col items-center justify-center mb-8 gap-3">
@@ -87,7 +86,7 @@ export function CompleteProfile({ userId, onComplete }: CompleteProfileProps) {
           <p className="text-gray-500 text-lg mt-2">Complete your profile to continue</p>
         </div>
 
-        <Card className="border-none shadow-[0_8px_40px_rgba(0,0,0,0.08)] bg-white/80 backdrop-blur-xl rounded-[32px] overflow-hidden">
+        <Card className="border-none shadow-[0_8px_40px_rgba(0,0,0,0.08)] bg-white/80 backdrop-blur-xl rounded-[32px]">
           <CardHeader className="pb-0 pt-8 px-8">
             <CardTitle className="text-xl font-semibold text-[#1b775b]">Personal & Organisation Details</CardTitle>
             <CardDescription>Please provide your details to set up your workspace.</CardDescription>
@@ -164,36 +163,40 @@ export function CompleteProfile({ userId, onComplete }: CompleteProfileProps) {
                   <p className="text-xs text-gray-500 ml-1">If this Organisation already exists, you will be added to it.</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 ml-1">
-                      <Briefcase size={16} className="text-[#3FA77C]" />
-                      <label className="text-sm font-medium text-gray-700">Nature of Organisation</label>
-                    </div>
-                    <Input
-                      value={formData.orgType}
-                      onChange={(e) => handleChange('orgType', e.target.value)}
-                      required
-                      className="bg-white/50 border-gray-200 h-12 pl-4 rounded-xl focus:ring-[#3FA77C] focus:border-[#3FA77C]"
-                      placeholder="e.g. SME, Project Developer, Insurer, Corporate..."
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 ml-1">
+                    <Briefcase size={16} className="text-[#3FA77C]" />
+                    <label className="text-sm font-medium text-gray-700">Nature of Organisation</label>
                   </div>
+                  <Input
+                    value={formData.orgType}
+                    onChange={(e) => handleChange('orgType', e.target.value)}
+                    required
+                    className="bg-white/50 border-gray-200 h-12 pl-4 rounded-xl focus:ring-[#3FA77C] focus:border-[#3FA77C]"
+                    placeholder="e.g. SME, Project Developer, Insurer, Corporate..."
+                  />
+                </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 ml-1">
-                      <User size={16} className="text-[#3FA77C]" />
-                      <label className="text-sm font-medium text-gray-700">Your Role</label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 ml-1">
+                    <User size={16} className="text-[#3FA77C]" />
+                    <label className="text-sm font-medium text-gray-700">Your Role</label>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={formData.role}
+                      onChange={(e) => handleChange('role', e.target.value)}
+                      required
+                      className="w-full bg-white/50 border border-gray-200 h-10 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#3FA77C] focus:border-[#3FA77C] appearance-none"
+                    >
+                      <option value="" disabled>Select Role</option>
+                      <option value="Manager">Manager</option>
+                      <option value="Farmer">Farmer</option>
+                      <option value="Owner">Owner</option>
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                      <ChevronDown size={18} />
                     </div>
-                    <Select onValueChange={(val) => handleChange('role', val)} value={formData.role}>
-                      <SelectTrigger className="bg-white/50 border-gray-200 h-12 rounded-xl focus:ring-[#3FA77C] focus:border-[#3FA77C]">
-                        <SelectValue placeholder="Select Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="Farmer">Farmer</SelectItem>
-                        <SelectItem value="Owner">Owner</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
 
