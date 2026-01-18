@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Thermometer, Droplets, CloudRain, Wind, AlertTriangle } from 'lucide-react';
+import { Thermometer, Droplets, CloudRain, Wind, AlertTriangle, ChevronDown, MapPin } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 interface MetricCardProps {
@@ -39,46 +39,35 @@ export function BottomDrawer({ onToggle, user }: BottomDrawerProps) {
   // Weather State
   const [weather, setWeather] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [weatherLoading, setWeatherLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [siteName, setSiteName] = useState<string>('');
+  
+  const [sites, setSites] = useState<any[]>([]);
+  const [selectedSite, setSelectedSite] = useState<any>(null);
 
   useEffect(() => {
     // Only fetch when expanded to save resources, or on mount if you prefer pre-loading
     // Fetching on mount ensures data is ready when they slide it up
-    const fetchData = async () => {
+    const fetchSites = async () => {
        try {
            if (!user || !user.organisationId) {
                // Silent fail or default
                return; 
            }
 
-           // 1. Fetch Site for the Org
+           // 1. Fetch Sites for the Org
            const sitesRes = await fetch(`${API_BASE_URL}/sites?organisationId=${user.organisationId}`);
            if (!sitesRes.ok) throw new Error("Failed to fetch sites");
            
-           const sites = await sitesRes.json();
-           if (!sites || sites.length === 0) {
+           const fetchedSites = await sitesRes.json();
+           if (!fetchedSites || fetchedSites.length === 0) {
               // No sites
               return;
            }
            
-           // Use the first site found
-           const site = sites[0];
-           setSiteName(site.name);
-           
-           if (!site.latitude || !site.longitude) {
-              return;
-           }
-
-           // 2. Fetch Weather Data (Open-Meteo)
-           const weatherRes = await fetch(
-               `https://api.open-meteo.com/v1/forecast?latitude=${site.latitude}&longitude=${site.longitude}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&wind_speed_unit=kmh`
-           );
-           
-           if (!weatherRes.ok) throw new Error("Weather service unavailable");
-           
-           const weatherData = await weatherRes.json();
-           setWeather(weatherData.current);
+           setSites(fetchedSites);
+           // Use the first site found by default
+           setSelectedSite(fetchedSites[0]);
 
        } catch (err: any) {
            console.error(err);
@@ -88,8 +77,41 @@ export function BottomDrawer({ onToggle, user }: BottomDrawerProps) {
        }
     };
 
-    fetchData();
+    fetchSites();
   }, [user]);
+
+  useEffect(() => {
+      const fetchWeather = async () => {
+          if (!selectedSite) return;
+  
+          if (!selectedSite.latitude || !selectedSite.longitude) {
+             console.warn(`Site "${selectedSite.name}" is missing coordinates.`);
+             setWeather(null);
+             return;
+          }
+  
+          setWeatherLoading(true);
+          
+          try {
+             // 2. Fetch Weather Data (Open-Meteo)
+             const weatherRes = await fetch(
+                 `https://api.open-meteo.com/v1/forecast?latitude=${selectedSite.latitude}&longitude=${selectedSite.longitude}&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&wind_speed_unit=kmh`
+             );
+             
+             if (!weatherRes.ok) throw new Error("Weather service unavailable");
+             
+             const weatherData = await weatherRes.json();
+             setWeather(weatherData.current);
+          } catch (err) {
+              console.error("Error fetching weather:", err);
+              setWeather(null);
+          } finally {
+              setWeatherLoading(false);
+          }
+      };
+  
+      fetchWeather();
+    }, [selectedSite]);
 
   const handleToggle = (expanded: boolean) => {
     setIsExpanded(expanded);
@@ -143,52 +165,89 @@ export function BottomDrawer({ onToggle, user }: BottomDrawerProps) {
 
         {/* Header */}
         <div className={`transition-all duration-300 ${isExpanded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 hidden'}`}>
-          <button
+          <div
             onClick={(e) => { e.stopPropagation(); handleToggle(!isExpanded); }}
-            className="w-full py-2 flex flex-col items-center justify-center gap-1 hover:bg-black/5 transition-colors"
+            className="w-full py-2 flex flex-col items-center justify-center gap-1 hover:bg-black/5 transition-colors cursor-pointer"
           >
-            <span className="text-gray-700 font-bold">Live Site Conditions 🌤️</span>
-            {siteName && <span className="text-xs text-[#3FA77C] font-medium">{siteName}</span>}
-          </button>
+            <span className="text-gray-700 font-bold text-lg">Live Site Conditions 🌤️</span>
+          </div>
         </div>
 
         {/* Content */}
         {isExpanded && (
-          <div className="px-6 pb-8 pt-4 overflow-y-auto h-[calc(100%-4rem)]">
+          <div className="px-6 pb-8 pt-2 overflow-y-auto h-[calc(100%-4rem)]">
             <div className="space-y-6 max-w-md mx-auto animate-in slide-in-from-bottom-4 fade-in duration-500">
                {loading ? (
                     <div className="text-center py-10 text-gray-500">Loading conditions...</div>
                ) : error ? (
                     <div className="text-center py-10 text-red-500">{error}</div>
-               ) : !weather ? (
-                    <div className="text-center py-10 text-gray-500">No data available. Check organization setup.</div>
                ) : (
-                   <div className="grid grid-cols-2 gap-4">
-                        <MetricCard
-                            icon={<CloudRain size={24} />}
-                            label="Precipitation"
-                            value={String(weather.precipitation)}
-                            unit="mm"
-                        />
-                        <MetricCard
-                            icon={<Thermometer size={24} />}
-                            label="Temperature"
-                            value={String(weather.temperature_2m)}
-                            unit="°C"
-                        />
-                        <MetricCard
-                            icon={<Droplets size={24} />}
-                            label="Humidity"
-                            value={String(weather.relative_humidity_2m)}
-                            unit="%"
-                        />
-                        <MetricCard
-                            icon={<Wind size={24} />}
-                            label="Wind"
-                            value={String(weather.wind_speed_10m)}
-                            unit="km/h"
-                        />
-                    </div>
+                   <>
+                        {/* Site Selector */}
+                        <div className="mb-4">
+                            {sites.length > 1 ? (
+                                <div className="relative">
+                                    <select
+                                        value={selectedSite?.site_id || ''}
+                                        onChange={(e) => {
+                                            const newSite = sites.find(s => s.site_id === e.target.value);
+                                            if (newSite) setSelectedSite(newSite);
+                                        }}
+                                        className="w-full appearance-none bg-gray-50/50 border border-gray-200 text-gray-800 text-sm rounded-xl p-3 pr-10 focus:ring-[#3FA77C] focus:border-[#3FA77C] font-medium outline-none transition-all cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {sites.map(site => (
+                                            <option key={site.site_id} value={site.site_id}>
+                                                {site.name} {site.site_code ? `(${site.site_code})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-center gap-2 p-2 bg-gray-50/50 rounded-lg text-gray-600 font-medium text-sm">
+                                    <MapPin size={16} className="text-[#3FA77C]" />
+                                    {selectedSite?.name || 'Monitoring Site'}
+                                </div>
+                            )}
+                        </div>
+
+                        {weatherLoading ? (
+                             <div className="py-12 flex flex-col items-center justify-center text-gray-400 animate-pulse">
+                                 <CloudRain size={40} className="mb-4 opacity-50" />
+                                 <span>Updating weather...</span>
+                             </div>
+                        ) : !weather ? (
+                            <div className="text-center py-10 text-gray-500">No data available for this site.</div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-4">
+                                <MetricCard
+                                    icon={<CloudRain size={24} />}
+                                    label="Precipitation"
+                                    value={String(weather.precipitation)}
+                                    unit="mm"
+                                />
+                                <MetricCard
+                                    icon={<Thermometer size={24} />}
+                                    label="Temperature"
+                                    value={String(weather.temperature_2m)}
+                                    unit="°C"
+                                />
+                                <MetricCard
+                                    icon={<Droplets size={24} />}
+                                    label="Humidity"
+                                    value={String(weather.relative_humidity_2m)}
+                                    unit="%"
+                                />
+                                <MetricCard
+                                    icon={<Wind size={24} />}
+                                    label="Wind"
+                                    value={String(weather.wind_speed_10m)}
+                                    unit="km/h"
+                                />
+                            </div>
+                        )}
+                   </>
                )}
             </div>
           </div>
