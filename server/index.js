@@ -898,10 +898,21 @@ app.post('/observations', async (req, res) => {
 app.get('/alerts', async (req, res) => {
   const { siteId } = req.query;
   try {
-    let query = 'SELECT * FROM alerts ORDER BY created_at DESC';
+    let query = `
+      SELECT a.*, o."Areablocknumber" as block_name 
+      FROM alerts a
+      LEFT JOIN observations o ON a.observation_id = o.observation_id
+      ORDER BY a.created_at DESC
+    `;
     let params = [];
     if (siteId) {
-      query = 'SELECT * FROM alerts WHERE site_id = $1 ORDER BY created_at DESC';
+      query = `
+        SELECT a.*, o."Areablocknumber" as block_name 
+        FROM alerts a
+        LEFT JOIN observations o ON a.observation_id = o.observation_id
+        WHERE a.site_id = $1 
+        ORDER BY a.created_at DESC
+      `;
       params = [siteId];
     }
     const result = await pool.query(query, params);
