@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import yieldData from '../data/yieldData.json';
 
 
-const API_KEY = "AIzaSyCDJsiiVY2Sgx6GRaMUmxbC8EgWs587B38";
+const API_KEY = "**";
 
 interface InsightsPageProps {
   onBack: () => void;
