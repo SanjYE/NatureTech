@@ -144,19 +144,9 @@ export function FarmActionLog({ onBack, user }: FarmActionLogProps) {
             ) : (
                 <div className="space-y-3">
                     {myToDoList.map(task => (
-                        <div key={task.task_id} className={`p-4 rounded-xl shadow-sm border flex items-start gap-4 transition-colors ${
+                        <div key={task.task_id} className={`p-4 rounded-xl shadow-sm border flex items-start justify-between gap-4 transition-colors ${
                             task.status === 'completed' ? 'bg-green-50/50 border-green-200' : 'bg-white border-gray-100'
                         }`}>
-                            <button 
-                                onClick={() => handleToggleStatus(task.task_id, task.status)}
-                                className={`mt-1 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
-                                    task.status === 'completed' 
-                                        ? 'bg-green-500 border-green-500 text-white shadow-sm' 
-                                        : 'bg-white border-gray-300 hover:border-[#1b6b3a]'
-                                }`}
-                            >
-                                {task.status === 'completed' && <Check size={14} strokeWidth={3} />}
-                            </button>
                             <div className="flex-1">
                                 <h3 className={`font-semibold transition-colors ${task.status === 'completed' ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
                                     {task.title}
@@ -181,6 +171,15 @@ export function FarmActionLog({ onBack, user }: FarmActionLogProps) {
                                         By: {task.created_by_name || 'Admin'}
                                     </span>
                                 </div>
+                            </div>
+
+                            <div className="pt-1">
+                                <input 
+                                    type="checkbox"
+                                    checked={task.status === 'completed'}
+                                    onChange={() => handleToggleStatus(task.task_id, task.status)}
+                                    className="w-6 h-6 border-2 border-gray-300 rounded cursor-pointer accent-[#1b6b3a]"
+                                />
                             </div>
                         </div>
                     ))}
