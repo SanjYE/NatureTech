@@ -12,10 +12,11 @@ interface AlertCardProps {
   description: string;
   status: 'critical' | 'warning' | 'resolved';
   timestamp: string;
+  blockName?: string;
   onAcknowledge?: () => void;
 }
 
-function AlertCard({ icon, title, description, status, timestamp, onAcknowledge }: AlertCardProps) {
+function AlertCard({ icon, title, description, status, timestamp, blockName, onAcknowledge }: AlertCardProps) {
   const statusConfig = {
     critical: {
       color: 'bg-red-100 text-red-700 border-red-200',
@@ -45,7 +46,10 @@ function AlertCard({ icon, title, description, status, timestamp, onAcknowledge 
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <h4 className="text-gray-800 flex-1">{title}</h4>
+            <h4 className="text-gray-800 flex-1 font-semibold">
+              {title}
+              {blockName && <span className="ml-2 font-normal text-xs text-gray-400">• Block {blockName}</span>}
+            </h4>
             <span className={`px-2.5 py-1 rounded-full text-xs flex-shrink-0 ${config.color}`}>
               {config.label}
             </span>
@@ -101,7 +105,8 @@ export function AlertsPage({ onBack }: AlertsPageProps) {
             description: a.message,
             status: a.status === 'resolved' ? 'resolved' : (a.severity === 'High' ? 'critical' : 'warning'),
             timestamp: new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            category: cat
+            category: cat,
+            blockName: a.block_name
           };
         });
         setAlertsData(formatted);
@@ -237,6 +242,7 @@ export function AlertsPage({ onBack }: AlertsPageProps) {
                 description={alert.description}
                 status={alert.status}
                 timestamp={alert.timestamp}
+                blockName={alert.blockName}
               />
             ))}
           </div>
@@ -254,6 +260,7 @@ export function AlertsPage({ onBack }: AlertsPageProps) {
                 description={alert.description}
                 status={alert.status}
                 timestamp={alert.timestamp}
+                blockName={alert.blockName}
               />
             ))}
           </div>
@@ -271,6 +278,7 @@ export function AlertsPage({ onBack }: AlertsPageProps) {
                 description={alert.description}
                 status={alert.status}
                 timestamp={alert.timestamp}
+                blockName={alert.blockName}
               />
             ))}
           </div>
